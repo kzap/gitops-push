@@ -27,6 +27,11 @@ inputs:
       The environment to deploy to (defaults to GitHub deployment environment if
       specified)
     required: true
+  application-name:
+    description:
+      Name of the application (defaults to the current repository name if not
+      specified)
+    required: false
 
 # Define your outputs here.
 outputs:
