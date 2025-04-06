@@ -31238,9 +31238,18 @@ var githubExports = requireGithub();
 async function run() {
   try {
     // Get inputs
-    const gitopsRepository = coreExports.getInput('gitops-repository', {
-      required: true
+    let gitopsRepository = coreExports.getInput('gitops-repository', {
+      required: false
     });
+    // If gitops-repository is not provided via input, check environment variable
+    if (!gitopsRepository) {
+      gitopsRepository = process.env.GITOPS_REPOSITORY || '';
+      if (!gitopsRepository) {
+        throw new Error(
+          'gitops-repository input or GITOPS_REPOSITORY environment variable must be provided'
+        )
+      }
+    }
     const gitopsToken = coreExports.getInput('gitops-token', { required: true });
     const gitopsBranch = coreExports.getInput('gitops-branch');
     const environment = coreExports.getInput('environment');

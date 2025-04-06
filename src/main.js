@@ -9,9 +9,18 @@ import * as github from '@actions/github'
 export async function run() {
   try {
     // Get inputs
-    const gitopsRepository = core.getInput('gitops-repository', {
-      required: true
+    let gitopsRepository = core.getInput('gitops-repository', {
+      required: false
     })
+    // If gitops-repository is not provided via input, check environment variable
+    if (!gitopsRepository) {
+      gitopsRepository = process.env.GITOPS_REPOSITORY || ''
+      if (!gitopsRepository) {
+        throw new Error(
+          'gitops-repository input or GITOPS_REPOSITORY environment variable must be provided'
+        )
+      }
+    }
     const gitopsToken = core.getInput('gitops-token', { required: true })
     const gitopsBranch = core.getInput('gitops-branch')
     const environment = core.getInput('environment')

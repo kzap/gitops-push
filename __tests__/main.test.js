@@ -87,20 +87,25 @@ describe('main.js', () => {
   })
 
   it('Sets a failed status on error', async () => {
-    // Force an error by throwing an exception when required input is requested
-    core.getInput.mockImplementation((name, options) => {
-      if (name === 'gitops-repository' && options && options.required) {
-        throw new Error('Input required and not supplied: gitops-repository')
-      }
+    // Clear environment variables for this test
+    const originalEnv = process.env
+    process.env = { ...originalEnv }
+    delete process.env.GITOPS_REPOSITORY
+
+    // Set up to return empty string for gitops-repository
+    core.getInput.mockImplementation((name) => {
       if (name === 'gitops-token') return 'token'
       return ''
     })
 
     await run()
 
-    // Verify that the action was marked as failed
+    // Verify that the action was marked as failed with the new error message
     expect(core.setFailed).toHaveBeenCalledWith(
-      'Input required and not supplied: gitops-repository'
+      'gitops-repository input or GITOPS_REPOSITORY environment variable must be provided'
     )
+
+    // Restore original environment
+    process.env = originalEnv
   })
 })
