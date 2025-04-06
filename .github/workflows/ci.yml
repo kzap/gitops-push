@@ -47,8 +47,13 @@ jobs:
   test-action:
     name: GitHub Actions Test
     runs-on: ubuntu-latest
+    environment: ${{ matrix.environment }}
     permissions:
       contents: write
+    strategy:
+      matrix:
+        environment: 
+          - test-action
 
     steps:
       - name: Checkout
@@ -62,6 +67,7 @@ jobs:
           gitops-token: ${{ github.token }}
           gitops-repository: kzap/gitops-push
           gitops-branch: gitops-ci-tests
+          environment: ${{ matrix.environment }}
 
       - name: Print Output
         id: output
