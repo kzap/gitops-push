@@ -15,6 +15,9 @@ inputs:
   gitops-repository:
     description: Name of the GitOps repository (can also be specified via GITOPS_REPOSITORY env var)
     required: true
+  gitops-branch-name:
+    description: Branch name to push to in the GitOps repository (defaults to the repository's default branch)
+    required: false
   environment:
     description: The environment to deploy to (defaults to GitHub deployment environment if specified)
     required: false
