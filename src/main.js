@@ -9,8 +9,10 @@ import * as github from '@actions/github'
 export async function run() {
   try {
     // Get inputs
-    const gitopsRepository = core.getInput('gitops-repository')
-    const gitopsToken = core.getInput('gitops-token')
+    const gitopsRepository = core.getInput('gitops-repository', {
+      required: true
+    })
+    const gitopsToken = core.getInput('gitops-token', { required: true })
     const gitopsBranch = core.getInput('gitops-branch')
     const environment = core.getInput('environment')
 
@@ -40,7 +42,7 @@ export async function run() {
     core.debug(`Git Repository: ${gitopsRepoName}`)
     core.debug(`Git Branch: ${gitopsBranch || 'default branch'}`)
     core.debug(`Environment: ${environment || 'not specified'}`)
-    
+
     // Print GitHub context for debugging
     core.startGroup('GitHub Context')
     core.info(JSON.stringify(github.context, null, 2))

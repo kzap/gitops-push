@@ -7,11 +7,21 @@
  */
 import { jest } from '@jest/globals'
 import * as core from '../__fixtures__/core.js'
-import { wait } from '../__fixtures__/wait.js'
 
 // Mocks should be declared before the module being tested is imported.
 jest.unstable_mockModule('@actions/core', () => core)
-jest.unstable_mockModule('../src/wait.js', () => ({ wait }))
+
+// Mock @actions/github
+const mockContext = {
+  repo: {
+    owner: 'test-owner',
+    repo: 'test-repo'
+  }
+}
+
+jest.unstable_mockModule('@actions/github', () => ({
+  context: mockContext
+}))
 
 // The module being tested should be imported dynamically. This ensures that the
 // mocks are used in place of any actual dependencies.
@@ -19,11 +29,15 @@ const { run } = await import('../src/main.js')
 
 describe('main.js', () => {
   beforeEach(() => {
-    // Set the action's inputs as return values from core.getInput().
-    core.getInput.mockImplementation(() => '500')
+    // Setup mock input values
+    const mockInputs = {
+      'gitops-repository': 'gitops-repo',
+      'gitops-token': 'secret-token',
+      'gitops-branch': 'main',
+      environment: 'production'
+    }
 
-    // Mock the wait function so that it does not actually wait.
-    wait.mockImplementation(() => Promise.resolve('done!'))
+    core.getInput.mockImplementation((name) => mockInputs[name] || '')
   })
 
   afterEach(() => {
@@ -42,21 +56,51 @@ describe('main.js', () => {
     )
   })
 
-  it('Sets a failed status', async () => {
-    // Clear the getInput mock and return an invalid value.
-    core.getInput.mockClear().mockReturnValueOnce('this is not a number')
-
-    // Clear the wait mock and return a rejected promise.
-    wait
-      .mockClear()
-      .mockRejectedValueOnce(new Error('milliseconds is not a number'))
+  it('Parses repository with owner/repo format', async () => {
+    core.getInput.mockImplementation((name) => {
+      if (name === 'gitops-repository') return 'custom-org/custom-repo'
+      if (name === 'gitops-token') return 'secret-token'
+      return ''
+    })
 
     await run()
 
-    // Verify that the action was marked as failed.
-    expect(core.setFailed).toHaveBeenNthCalledWith(
-      1,
-      'milliseconds is not a number'
+    // Verify debug logs for repository parsing
+    expect(core.debug).toHaveBeenCalledWith(
+      expect.stringContaining('custom-org/custom-repo')
+    )
+  })
+
+  it('Uses context owner when repository has no owner', async () => {
+    core.getInput.mockImplementation((name) => {
+      if (name === 'gitops-repository') return 'repo-only'
+      if (name === 'gitops-token') return 'secret-token'
+      return ''
+    })
+
+    await run()
+
+    // Verify it used the context owner
+    expect(core.debug).toHaveBeenCalledWith(
+      expect.stringContaining('test-owner')
+    )
+  })
+
+  it('Sets a failed status on error', async () => {
+    // Force an error by throwing an exception when required input is requested
+    core.getInput.mockImplementation((name, options) => {
+      if (name === 'gitops-repository' && options && options.required) {
+        throw new Error('Input required and not supplied: gitops-repository')
+      }
+      if (name === 'gitops-token') return 'token'
+      return ''
+    })
+
+    await run()
+
+    // Verify that the action was marked as failed
+    expect(core.setFailed).toHaveBeenCalledWith(
+      'Input required and not supplied: gitops-repository'
     )
   })
 })
