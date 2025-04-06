@@ -26,7 +26,7 @@ inputs:
     description:
       The environment to deploy to (defaults to GitHub deployment environment if
       specified)
-    required: false
+    required: true
 
 # Define your outputs here.
 outputs:

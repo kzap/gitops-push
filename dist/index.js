@@ -31294,10 +31294,9 @@ async function run() {
     coreExports.debug(`Git Branch: ${gitopsBranch || '[Using default branch]'}`);
     coreExports.debug(`Environment: ${environment || 'not specified'}`);
 
-    // Print GitHub context for debugging
-    coreExports.startGroup('GitHub Context');
-    coreExports.info(JSON.stringify(githubExports.context, null, 2));
-    coreExports.endGroup();
+    coreExports.notice(
+      `We are going to push [${environment}] ArgoCD Applications to [${gitopsOrg}/${gitopsRepoName}] on the branch [${gitopsBranch || '[Using default branch]'}].`
+    );
 
     // The rest of your implementation will go here
     // ...
