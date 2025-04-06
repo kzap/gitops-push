@@ -1,23 +1,28 @@
-name: The name of your action here
-description: Provide a description here
-author: Your name or organization here
+name: GitOps Push
+description: Push changes to a GitOps repository
+author: KZAP
 
 # Add your action's branding here. This will appear on the GitHub Marketplace.
 branding:
-  icon: heart
-  color: red
+  icon: git-branch
+  color: green
 
 # Define your inputs here.
 inputs:
-  milliseconds:
-    description: Your input description here
+  gitops-token:
+    description: GitHub token with push permissions to the GitOps repository
     required: true
-    default: '1000'
+  gitops-repository:
+    description: Name of the GitOps repository (can also be specified via GITOPS_REPOSITORY env var)
+    required: true
+  environment:
+    description: The environment to deploy to (defaults to GitHub deployment environment if specified)
+    required: false
 
 # Define your outputs here.
 outputs:
   time:
-    description: Your output description here
+    description: Time when the push was completed
 
 runs:
   using: node20
