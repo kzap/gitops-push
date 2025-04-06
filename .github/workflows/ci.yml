@@ -47,6 +47,8 @@ jobs:
   test-action:
     name: GitHub Actions Test
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
@@ -57,7 +59,9 @@ jobs:
         id: test-action
         uses: ./
         with:
-          milliseconds: 1000
+          gitops-token: ${{ github.token }}
+          gitops-repository: kzap/gitops-push
+          gitops-branch: gitops-ci-tests
 
       - name: Print Output
         id: output
