@@ -2,6 +2,32 @@ import * as core from '@actions/core'
 import * as github from '@actions/github'
 
 /**
+ * Parse the repository information from input.
+ *
+ * @param {string} repository - The repository string to parse
+ * @returns {Object} Object containing gitopsOrg and gitopsRepoName
+ */
+export function parseRepositoryInfo(repository) {
+  let gitopsOrg = ''
+  let gitopsRepoName = ''
+
+  if (repository.includes('/')) {
+    // If repository contains a slash, split it to get org and repo name
+    const parts = repository.split('/')
+    gitopsOrg = parts[0]
+    gitopsRepoName = parts[1]
+    core.debug(`Using provided repository: ${gitopsOrg}/${gitopsRepoName}`)
+  } else {
+    // If not, use the current repository's owner as the org
+    gitopsOrg = github.context.repo.owner
+    gitopsRepoName = repository
+    core.debug(`Using context owner: ${gitopsOrg}/${gitopsRepoName}`)
+  }
+
+  return { gitopsOrg, gitopsRepoName }
+}
+
+/**
  * The main function for the action.
  *
  * @returns {Promise<void>} Resolves when the action is complete.
@@ -22,25 +48,12 @@ export async function run() {
       }
     }
     const gitopsToken = core.getInput('gitops-token', { required: true })
-    const gitopsBranch = core.getInput('gitops-branch')
-    const environment = core.getInput('environment')
+    const gitopsBranch = core.getInput('gitops-branch', { required: false })
+    const environment = core.getInput('environment', { required: true })
 
-    // Process repository information
-    let gitopsOrg = ''
-    let gitopsRepoName = ''
-
-    if (gitopsRepository.includes('/')) {
-      // If gitops-repository contains a slash, split it to get org and repo name
-      const parts = gitopsRepository.split('/')
-      gitopsOrg = parts[0]
-      gitopsRepoName = parts[1]
-      core.debug(`Using provided repository: ${gitopsOrg}/${gitopsRepoName}`)
-    } else {
-      // If not, use the current repository's owner as the org
-      gitopsOrg = github.context.repo.owner
-      gitopsRepoName = gitopsRepository
-      core.debug(`Using context owner: ${gitopsOrg}/${gitopsRepoName}`)
-    }
+    // Parse repository information
+    const { gitopsOrg, gitopsRepoName } = parseRepositoryInfo(gitopsRepository)
+    core.debug(`Repository parsed as: ${gitopsOrg}/${gitopsRepoName}`)
 
     // Mask the token to prevent it from being logged
     core.setSecret(gitopsToken)
@@ -49,7 +62,7 @@ export async function run() {
     // Log information (debug only)
     core.debug(`Git Organization: ${gitopsOrg}`)
     core.debug(`Git Repository: ${gitopsRepoName}`)
-    core.debug(`Git Branch: ${gitopsBranch || 'default branch'}`)
+    core.debug(`Git Branch: ${gitopsBranch || '[Using default branch]'}`)
     core.debug(`Environment: ${environment || 'not specified'}`)
 
     // Print GitHub context for debugging

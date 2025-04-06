@@ -25,7 +25,7 @@ jest.unstable_mockModule('@actions/github', () => ({
 
 // The module being tested should be imported dynamically. This ensures that the
 // mocks are used in place of any actual dependencies.
-const { run } = await import('../src/main.js')
+const { run, parseRepositoryInfo } = await import('../src/main.js')
 
 describe('main.js', () => {
   beforeEach(() => {
@@ -104,6 +104,25 @@ describe('main.js', () => {
     expect(core.setFailed).toHaveBeenCalledWith(
       'gitops-repository input or GITOPS_REPOSITORY environment variable must be provided'
     )
+
+    // Restore original environment
+    process.env = originalEnv
+  })
+
+  it('Uses GITHUB_REPOSITORY owner when repo is specified without owner', () => {
+    // Set GITHUB_REPOSITORY environment variable
+    const originalEnv = process.env
+    process.env = { ...originalEnv, GITHUB_REPOSITORY: 'orgName/test-repo' }
+
+    // Mock the context to get owner from GITHUB_REPOSITORY
+    mockContext.repo.owner = 'orgName'
+
+    // Call the function directly
+    const result = parseRepositoryInfo('gitops-repo')
+
+    // Verify it used the GITHUB_REPOSITORY owner
+    expect(result.gitopsOrg).toBe('orgName')
+    expect(result.gitopsRepoName).toBe('gitops-repo')
 
     // Restore original environment
     process.env = originalEnv

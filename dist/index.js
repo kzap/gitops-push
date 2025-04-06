@@ -31231,6 +31231,32 @@ function requireGithub () {
 var githubExports = requireGithub();
 
 /**
+ * Parse the repository information from input.
+ *
+ * @param {string} repository - The repository string to parse
+ * @returns {Object} Object containing gitopsOrg and gitopsRepoName
+ */
+function parseRepositoryInfo(repository) {
+  let gitopsOrg = '';
+  let gitopsRepoName = '';
+
+  if (repository.includes('/')) {
+    // If repository contains a slash, split it to get org and repo name
+    const parts = repository.split('/');
+    gitopsOrg = parts[0];
+    gitopsRepoName = parts[1];
+    coreExports.debug(`Using provided repository: ${gitopsOrg}/${gitopsRepoName}`);
+  } else {
+    // If not, use the current repository's owner as the org
+    gitopsOrg = githubExports.context.repo.owner;
+    gitopsRepoName = repository;
+    coreExports.debug(`Using context owner: ${gitopsOrg}/${gitopsRepoName}`);
+  }
+
+  return { gitopsOrg, gitopsRepoName }
+}
+
+/**
  * The main function for the action.
  *
  * @returns {Promise<void>} Resolves when the action is complete.
@@ -31251,25 +31277,12 @@ async function run() {
       }
     }
     const gitopsToken = coreExports.getInput('gitops-token', { required: true });
-    const gitopsBranch = coreExports.getInput('gitops-branch');
-    const environment = coreExports.getInput('environment');
+    const gitopsBranch = coreExports.getInput('gitops-branch', { required: false });
+    const environment = coreExports.getInput('environment', { required: true });
 
-    // Process repository information
-    let gitopsOrg = '';
-    let gitopsRepoName = '';
-
-    if (gitopsRepository.includes('/')) {
-      // If gitops-repository contains a slash, split it to get org and repo name
-      const parts = gitopsRepository.split('/');
-      gitopsOrg = parts[0];
-      gitopsRepoName = parts[1];
-      coreExports.debug(`Using provided repository: ${gitopsOrg}/${gitopsRepoName}`);
-    } else {
-      // If not, use the current repository's owner as the org
-      gitopsOrg = githubExports.context.repo.owner;
-      gitopsRepoName = gitopsRepository;
-      coreExports.debug(`Using context owner: ${gitopsOrg}/${gitopsRepoName}`);
-    }
+    // Parse repository information
+    const { gitopsOrg, gitopsRepoName } = parseRepositoryInfo(gitopsRepository);
+    coreExports.debug(`Repository parsed as: ${gitopsOrg}/${gitopsRepoName}`);
 
     // Mask the token to prevent it from being logged
     coreExports.setSecret(gitopsToken);
@@ -31278,7 +31291,7 @@ async function run() {
     // Log information (debug only)
     coreExports.debug(`Git Organization: ${gitopsOrg}`);
     coreExports.debug(`Git Repository: ${gitopsRepoName}`);
-    coreExports.debug(`Git Branch: ${gitopsBranch || 'default branch'}`);
+    coreExports.debug(`Git Branch: ${gitopsBranch || '[Using default branch]'}`);
     coreExports.debug(`Environment: ${environment || 'not specified'}`);
 
     // Print GitHub context for debugging
