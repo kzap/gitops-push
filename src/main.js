@@ -1,5 +1,5 @@
 import * as core from '@actions/core'
-import { wait } from './wait.js'
+import * as github from '@actions/github'
 
 /**
  * The main function for the action.
@@ -8,15 +8,46 @@ import { wait } from './wait.js'
  */
 export async function run() {
   try {
-    const ms = core.getInput('milliseconds')
+    // Get inputs
+    const gitopsRepository = core.getInput('gitops-repository')
+    const gitopsToken = core.getInput('gitops-token')
+    const gitopsBranch = core.getInput('gitops-branch')
+    const environment = core.getInput('environment')
 
-    // Debug logs are only output if the `ACTIONS_STEP_DEBUG` secret is true
-    core.debug(`Waiting ${ms} milliseconds ...`)
+    // Process repository information
+    let gitopsOrg = ''
+    let gitopsRepoName = ''
 
-    // Log the current timestamp, wait, then log the new timestamp
-    core.debug(new Date().toTimeString())
-    await wait(parseInt(ms, 10))
-    core.debug(new Date().toTimeString())
+    if (gitopsRepository.includes('/')) {
+      // If gitops-repository contains a slash, split it to get org and repo name
+      const parts = gitopsRepository.split('/')
+      gitopsOrg = parts[0]
+      gitopsRepoName = parts[1]
+      core.debug(`Using provided repository: ${gitopsOrg}/${gitopsRepoName}`)
+    } else {
+      // If not, use the current repository's owner as the org
+      gitopsOrg = github.context.repo.owner
+      gitopsRepoName = gitopsRepository
+      core.debug(`Using context owner: ${gitopsOrg}/${gitopsRepoName}`)
+    }
+
+    // Mask the token to prevent it from being logged
+    core.setSecret(gitopsToken)
+    core.debug('Token has been masked in logs')
+
+    // Log information (debug only)
+    core.debug(`Git Organization: ${gitopsOrg}`)
+    core.debug(`Git Repository: ${gitopsRepoName}`)
+    core.debug(`Git Branch: ${gitopsBranch || 'default branch'}`)
+    core.debug(`Environment: ${environment || 'not specified'}`)
+    
+    // Print GitHub context for debugging
+    core.startGroup('GitHub Context')
+    core.info(JSON.stringify(github.context, null, 2))
+    core.endGroup()
+
+    // The rest of your implementation will go here
+    // ...
 
     // Set outputs for other workflow steps to use
     core.setOutput('time', new Date().toTimeString())
