@@ -8,11 +8,13 @@ repository.
 
 The action will:
 
-1. Copy a directory of manifests specified in the input into gitops-repo/$applicationName and push that to the git repository give
-1. Generate ArgoCD ApplicationSet manifest files based on templates, and put those at gitops-repo/application-sets/$applicationNmae
-2. Push these manifests to a specified GitOps repository
-3. Organize manifests by environment and application name
-4. Support configurable branches and repository destinations
+1. Copy a directory of manifests specified in the input into
+   gitops-repo/$applicationName and push that to the git repository give
+1. Generate ArgoCD ApplicationSet manifest files based on templates, and put
+   those at gitops-repo/application-sets/$applicationNmae
+1. Push these manifests to a specified GitOps repository
+1. Organize manifests by environment and application name
+1. Support configurable branches and repository destinations
 
 ## Implementation Steps
 
