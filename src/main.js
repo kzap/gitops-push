@@ -1,4 +1,5 @@
 import * as core from '@actions/core'
+import * as github from '@actions/github'
 import { wait } from './wait.js'
 
 /**
@@ -10,8 +11,20 @@ export async function run() {
   try {
     const ms = core.getInput('milliseconds')
 
+    // Get service-name input or default to repo name
+    const context = github.context
+    let serviceName = core.getInput('service-name')
+    if (!serviceName) {
+      serviceName = context.repo.repo
+    }
+
+    // Get environment input
+    const environment = core.getInput('environment')
+
     // Debug logs are only output if the `ACTIONS_STEP_DEBUG` secret is true
     core.debug(`Waiting ${ms} milliseconds ...`)
+    core.debug(`Service Name: ${serviceName}`)
+    core.debug(`Environment: ${environment}`)
 
     // Log the current timestamp, wait, then log the new timestamp
     core.debug(new Date().toTimeString())

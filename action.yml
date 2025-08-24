@@ -13,6 +13,14 @@ inputs:
     description: Your input description here
     required: true
     default: '1000'
+  service-name:
+    description: Service name for deployment
+    required: false
+    default: ''
+  environment:
+    description: Target environment for deployment
+    required: false
+    default: ''
 
 # Define your outputs here.
 outputs:
