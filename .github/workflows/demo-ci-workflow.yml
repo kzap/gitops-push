@@ -1,0 +1,39 @@
+# Test Commit
+name: CNCF Demo CI Workflow
+
+on: push
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        environment:
+          - dev
+          - stage
+          - production
+      fail-fast: false
+    environment: ${{ matrix.environment }}
+    steps:
+      - name: Setup
+        id: Setup
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy
+        id: deploy
+        uses: ./
+        with:
+          gitops-token: ${{ github.token }}
+          gitops-repository: kzap/gitops-push
+          gitops-branch: demo-cncf-20250826-${{ github.sha }}
+          environment: ${{ matrix.environment }}
