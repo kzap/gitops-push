@@ -39695,8 +39695,8 @@ async function generateFromTemplate(templateName, data) {
   try {
     // Get absolute path to template file
     const templatePath = path.resolve(
-      path.dirname(new URL(import.meta.url).pathname),
-      '../templates',
+      process.cwd(),
+      'src/templates',
       `${templateName}.hbs`
     );
 
