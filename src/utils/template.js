@@ -14,8 +14,8 @@ export async function generateFromTemplate(templateName, data) {
   try {
     // Get absolute path to template file
     const templatePath = path.resolve(
-      __dirname,
-      '../templates',
+      process.cwd(),
+      'src/templates',
       `${templateName}.hbs`
     )
 

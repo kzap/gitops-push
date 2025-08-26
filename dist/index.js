@@ -39695,8 +39695,8 @@ async function generateFromTemplate(templateName, data) {
   try {
     // Get absolute path to template file
     const templatePath = path.resolve(
-      __dirname,
-      '../templates',
+      process.cwd(),
+      'src/templates',
       `${templateName}.hbs`
     );
 
@@ -39760,9 +39760,14 @@ async function cloneGitOpsRepo(token, org, repo, branch, directory) {
     const cloneUrl = `https://x-access-token:${token}@github.com/${org}/${repo}.git`;
     await execExports.exec('git', ['clone', cloneUrl, directory]);
 
-    // Checkout the target branch if specified
+    // Checkout the target branch if specified, create it if it doesn't exist
     if (branch) {
-      await execExports.exec('git', ['checkout', branch], { cwd: directory });
+      try {
+        await execExports.exec('git', ['checkout', branch], { cwd: directory });
+      } catch (error) {
+        coreExports.debug(`Branch ${branch} doesn't exist, creating new branch`);
+        await execExports.exec('git', ['checkout', '-b', branch], { cwd: directory });
+      }
     }
 
     // Configure Git user for commits
