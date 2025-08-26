@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: gitops-push-stage
+  namespace: argocd
+spec:
+  generators:
+  - git:
+      repoURL: https://github.com/kzap/gitops-push.git
+      revision: kzap-cncf-demo-20250826
+      directories:
+      - path: k8s/stage/*
+  template:
+    metadata:
+      name: 'gitops-push-stage-{{path.basename}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/kzap/gitops-push.git
+        targetRevision: kzap-cncf-demo-20250826
+        path: '{{path}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: 'gitops-push-stage-{{path.basename}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true
