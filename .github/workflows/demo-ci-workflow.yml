@@ -14,9 +14,15 @@ jobs:
     strategy:
       matrix:
         environment:
-          - test-action
+          - dev
+          - stage
+          - production
     environment: ${{ matrix.environment }}
     steps:
+      - name: Setup
+        id: Setup
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
       - name: Checkout
         id: checkout
         uses: actions/checkout@v4
@@ -27,7 +33,7 @@ jobs:
         with:
           gitops-token: ${{ github.token }}
           gitops-repository: kzap/gitops-push
-          gitops-branch: demo-cncf-20250826
+          gitops-branch: demo-cncf-20250826-${{ github.sha }}
           environment: ${{ matrix.environment }}
 
       - name: Verify Generated YAML Structure
@@ -38,7 +44,7 @@ jobs:
           # Clone the gitops repository to check the generated files
           git clone https://github.com/kzap/gitops-push.git gitops-repo
           cd gitops-repo
-          git checkout demo-cncf-20250826
+          git checkout demo-cncf-20250826-${{ github.sha }}
 
           # Find and verify the ApplicationSet YAML file
           # Look specifically for ApplicationSet files in the applicationsets directory
