@@ -86,9 +86,12 @@ jobs:
           git checkout gitops-ci-${{ github.run_id }}-${{ github.run_attempt }}
 
           # Find and verify the ApplicationSet YAML file
-          YAML_FILE=$(find . -name "*.yaml" -o -name "*.yml" | head -1)
+          # Look specifically for ApplicationSet files in the applicationsets directory
+          YAML_FILE=$(find ./applicationsets -name "*.yaml" -o -name "*.yml" | head -1)
           if [ -z "$YAML_FILE" ]; then
-            echo "❌ No YAML file found in gitops repository"
+            echo "❌ No ApplicationSet YAML file found in applicationsets directory"
+            echo "📁 Directory structure:"
+            find . -type f -name "*.yml" -o -name "*.yaml" | head -10
             exit 1
           fi
 
