@@ -48,9 +48,14 @@ async function cloneGitOpsRepo(token, org, repo, branch, directory) {
     const cloneUrl = `https://x-access-token:${token}@github.com/${org}/${repo}.git`
     await exec.exec('git', ['clone', cloneUrl, directory])
 
-    // Checkout the target branch if specified
+    // Checkout the target branch if specified, create it if it doesn't exist
     if (branch) {
-      await exec.exec('git', ['checkout', branch], { cwd: directory })
+      try {
+        await exec.exec('git', ['checkout', branch], { cwd: directory })
+      } catch (error) {
+        core.debug(`Branch ${branch} doesn't exist, creating new branch`)
+        await exec.exec('git', ['checkout', '-b', branch], { cwd: directory })
+      }
     }
 
     // Configure Git user for commits
