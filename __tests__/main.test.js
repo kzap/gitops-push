@@ -7,56 +7,204 @@
  */
 import { jest } from '@jest/globals'
 import * as core from '../__fixtures__/core.js'
-import { wait } from '../__fixtures__/wait.js'
 
 // Mocks should be declared before the module being tested is imported.
 jest.unstable_mockModule('@actions/core', () => core)
-jest.unstable_mockModule('../src/wait.js', () => ({ wait }))
+
+// Mock @actions/github
+const mockContext = {
+  repo: {
+    owner: 'test-owner',
+    repo: 'test-repo'
+  }
+}
+
+jest.unstable_mockModule('@actions/github', () => ({
+  context: mockContext
+}))
+
+// Mock @actions/io
+const mockIo = {
+  mkdirP: jest.fn().mockImplementation(() => Promise.resolve()),
+  rmRF: jest.fn().mockImplementation(() => Promise.resolve())
+}
+jest.unstable_mockModule('@actions/io', () => mockIo)
+
+// Mock @actions/exec
+const mockExec = {
+  exec: jest.fn().mockImplementation(() => Promise.resolve(0))
+}
+jest.unstable_mockModule('@actions/exec', () => mockExec)
+
+// Mock fs
+const mockFs = {
+  promises: {
+    writeFile: jest.fn().mockImplementation(() => Promise.resolve()),
+    readFile: jest
+      .fn()
+      .mockImplementation(() => Promise.resolve('template content'))
+  }
+}
+jest.unstable_mockModule('fs', () => mockFs)
+
+// Mock template util
+jest.unstable_mockModule('../src/utils/template.js', () => ({
+  generateFromTemplate: jest
+    .fn()
+    .mockImplementation(() => Promise.resolve('generated template content'))
+}))
 
 // The module being tested should be imported dynamically. This ensures that the
 // mocks are used in place of any actual dependencies.
-const { run } = await import('../src/main.js')
+const { run, parseRepositoryInfo } = await import('../src/main.js')
 
 describe('main.js', () => {
   beforeEach(() => {
-    // Set the action's inputs as return values from core.getInput().
-    core.getInput.mockImplementation(() => '500')
+    // Setup mock input values
+    const mockInputs = {
+      'gitops-repository': 'gitops-repo',
+      'gitops-token': 'secret-token',
+      'gitops-branch': 'main',
+      environment: 'production',
+      'application-name': 'test-app'
+    }
 
-    // Mock the wait function so that it does not actually wait.
-    wait.mockImplementation(() => Promise.resolve('done!'))
+    core.getInput.mockImplementation((name) => mockInputs[name] || '')
+
+    // Mock process.env
+    process.env.GITHUB_REF_NAME = 'main'
   })
 
   afterEach(() => {
     jest.resetAllMocks()
+    // Clean up env variables
+    delete process.env.GITHUB_REF_NAME
   })
 
-  it('Sets the time output', async () => {
+  it('Sets the time output and generates manifest', async () => {
     await run()
 
+    // Verify the ApplicationSet directory was created
+    expect(mockIo.mkdirP).toHaveBeenCalled()
+
+    // Verify template was generated
+    expect(mockFs.promises.writeFile).toHaveBeenCalled()
+
+    // Verify git operations were performed
+    expect(mockExec.exec).toHaveBeenCalled()
+
     // Verify the time output was set.
-    expect(core.setOutput).toHaveBeenNthCalledWith(
-      1,
+    expect(core.setOutput).toHaveBeenCalledWith(
       'time',
-      // Simple regex to match a time string in the format HH:MM:SS.
       expect.stringMatching(/^\d{2}:\d{2}:\d{2}/)
     )
   })
 
-  it('Sets a failed status', async () => {
-    // Clear the getInput mock and return an invalid value.
-    core.getInput.mockClear().mockReturnValueOnce('this is not a number')
-
-    // Clear the wait mock and return a rejected promise.
-    wait
-      .mockClear()
-      .mockRejectedValueOnce(new Error('milliseconds is not a number'))
+  it('Parses repository with owner/repo format', async () => {
+    core.getInput.mockImplementation((name) => {
+      if (name === 'gitops-repository') return 'custom-org/custom-repo'
+      if (name === 'gitops-token') return 'secret-token'
+      return ''
+    })
 
     await run()
 
-    // Verify that the action was marked as failed.
-    expect(core.setFailed).toHaveBeenNthCalledWith(
-      1,
-      'milliseconds is not a number'
+    // Verify debug logs for repository parsing
+    expect(core.debug).toHaveBeenCalledWith(
+      expect.stringContaining('custom-org/custom-repo')
+    )
+  })
+
+  it('Uses context owner when repository has no owner', async () => {
+    core.getInput.mockImplementation((name) => {
+      if (name === 'gitops-repository') return 'repo-only'
+      if (name === 'gitops-token') return 'secret-token'
+      return ''
+    })
+
+    await run()
+
+    // Verify it used the context owner
+    expect(core.debug).toHaveBeenCalledWith(
+      expect.stringContaining('test-owner')
+    )
+  })
+
+  it('Sets a failed status on error', async () => {
+    // Clear environment variables for this test
+    const originalEnv = process.env
+    process.env = { ...originalEnv }
+    delete process.env.GITOPS_REPOSITORY
+
+    // Set up to return empty string for gitops-repository
+    core.getInput.mockImplementation((name) => {
+      if (name === 'gitops-token') return 'token'
+      return ''
+    })
+
+    await run()
+
+    // Verify that the action was marked as failed with the new error message
+    expect(core.setFailed).toHaveBeenCalledWith(
+      'gitops-repository input or GITOPS_REPOSITORY environment variable must be provided'
+    )
+
+    // Restore original environment
+    process.env = originalEnv
+  })
+
+  it('Uses GITHUB_REPOSITORY owner when repo is specified without owner', () => {
+    // Set GITHUB_REPOSITORY environment variable
+    const originalEnv = process.env
+    process.env = { ...originalEnv, GITHUB_REPOSITORY: 'orgName/test-repo' }
+
+    // Mock the context to get owner from GITHUB_REPOSITORY
+    mockContext.repo.owner = 'orgName'
+
+    // Call the function directly
+    const result = parseRepositoryInfo('gitops-repo')
+
+    // Verify it used the GITHUB_REPOSITORY owner
+    expect(result.gitopsOrg).toBe('orgName')
+    expect(result.gitopsRepoName).toBe('gitops-repo')
+
+    // Restore original environment
+    process.env = originalEnv
+  })
+
+  it('Uses application-name from input when provided', async () => {
+    // Mock input with custom application name
+    core.getInput.mockImplementation((name) => {
+      if (name === 'application-name') return 'custom-app'
+      if (name === 'gitops-token') return 'secret-token'
+      if (name === 'gitops-repository') return 'test-org/gitops-repo'
+      if (name === 'environment') return 'staging'
+      return ''
+    })
+
+    await run()
+
+    // Verify that the custom application name was used
+    expect(core.notice).toHaveBeenCalledWith(
+      expect.stringContaining('custom-app')
+    )
+  })
+
+  it('Uses repository name as application-name when not provided', async () => {
+    // Remove application-name from inputs
+    core.getInput.mockImplementation((name) => {
+      if (name === 'application-name') return ''
+      if (name === 'gitops-token') return 'secret-token'
+      if (name === 'gitops-repository') return 'test-org/gitops-repo'
+      if (name === 'environment') return 'staging'
+      return ''
+    })
+
+    await run()
+
+    // Verify that the repository name was used as application name
+    expect(core.notice).toHaveBeenCalledWith(
+      expect.stringContaining('test-repo')
     )
   })
 })

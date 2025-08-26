@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: {{appsetName}}
+  namespace: argocd
+spec:
+  generators:
+  - git:
+      repoURL: https://github.com/{{sourceOrg}}/{{sourceRepo}}.git
+      revision: {{sourceBranch}}
+      directories:
+      - path: k8s/{{environment}}/*
+  template:
+    metadata:
+      name: '{{appsetName}}-\{{path.basename}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/{{sourceOrg}}/{{sourceRepo}}.git
+        targetRevision: {{sourceBranch}}
+        path: '\{{path}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{appsetName}}-\{{path.basename}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true
