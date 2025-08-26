@@ -17,6 +17,7 @@ jobs:
           - dev
           - stage
           - production
+        fail-fast: false
     environment: ${{ matrix.environment }}
     steps:
       - name: Setup
