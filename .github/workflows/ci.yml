@@ -44,8 +44,8 @@ jobs:
         id: npm-ci-test
         run: npm run ci-test
 
-  test-action:
-    name: GitHub Actions Test
+  e2e-test:
+    name: End-to-End Test
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -65,9 +65,101 @@ jobs:
         with:
           gitops-token: ${{ github.token }}
           gitops-repository: kzap/gitops-push
-          gitops-branch: gitops-ci
+          gitops-branch:
+            gitops-ci-${{ github.run_id }}-${{ github.run_attempt }}
           environment: ${{ matrix.environment }}
 
       - name: Print Output
         id: output
         run: echo "${{ steps.test-action.outputs.time }}"
+
+      - name: Verify Generated YAML Structure
+        id: verify-yaml
+        run: |
+          echo "Verifying ApplicationSet YAML structure..."
+
+          # Clone the gitops repository to check the generated files
+          git clone https://github.com/kzap/gitops-push.git gitops-repo
+          cd gitops-repo
+          git checkout gitops-ci-${{ github.run_id }}-${{ github.run_attempt }}
+
+          # Find and verify the ApplicationSet YAML file
+          YAML_FILE=$(find . -name "*.yaml" -o -name "*.yml" | head -1)
+          if [ -z "$YAML_FILE" ]; then
+            echo "❌ No YAML file found in gitops repository"
+            exit 1
+          fi
+
+          echo "📄 Found YAML file: $YAML_FILE"
+          echo "📋 YAML Content:"
+          cat "$YAML_FILE"
+
+          # Verify YAML structure using yq (install if needed)
+          if ! command -v yq &> /dev/null; then
+            sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+            sudo chmod +x /usr/local/bin/yq
+          fi
+
+          # Validate YAML syntax
+          if ! yq eval '.' "$YAML_FILE" > /dev/null 2>&1; then
+            echo "❌ Invalid YAML syntax"
+            exit 1
+          fi
+
+          # Verify ApplicationSet structure
+          API_VERSION=$(yq eval '.apiVersion' "$YAML_FILE")
+          KIND=$(yq eval '.kind' "$YAML_FILE")
+          APP_NAME=$(yq eval '.metadata.name' "$YAML_FILE")
+          NAMESPACE=$(yq eval '.metadata.namespace' "$YAML_FILE")
+          REPO_URL=$(yq eval '.spec.generators[0].git.repoURL' "$YAML_FILE")
+          ENVIRONMENT_PATH=$(yq eval '.spec.generators[0].git.directories[0].path' "$YAML_FILE")
+
+          echo "🔍 Verifying ApplicationSet fields:"
+          echo "  apiVersion: $API_VERSION"
+          echo "  kind: $KIND"
+          echo "  metadata.name: $APP_NAME"
+          echo "  metadata.namespace: $NAMESPACE"
+          echo "  spec.generators[0].git.repoURL: $REPO_URL"
+          echo "  spec.generators[0].git.directories[0].path: $ENVIRONMENT_PATH"
+
+          # Validate required fields
+          if [ "$API_VERSION" != "argoproj.io/v1alpha1" ]; then
+            echo "❌ Invalid apiVersion: expected 'argoproj.io/v1alpha1', got '$API_VERSION'"
+            exit 1
+          fi
+
+          if [ "$KIND" != "ApplicationSet" ]; then
+            echo "❌ Invalid kind: expected 'ApplicationSet', got '$KIND'"
+            exit 1
+          fi
+
+          if [ "$NAMESPACE" != "argocd" ]; then
+            echo "❌ Invalid namespace: expected 'argocd', got '$NAMESPACE'"
+            exit 1
+          fi
+
+          if [[ "$REPO_URL" != *"github.com"* ]]; then
+            echo "❌ Invalid repoURL: expected GitHub URL, got '$REPO_URL'"
+            exit 1
+          fi
+
+          if [[ "$ENVIRONMENT_PATH" != *"${{ matrix.environment }}"* ]]; then
+            echo "❌ Invalid environment path: expected to contain '${{ matrix.environment }}', got '$ENVIRONMENT_PATH'"
+            exit 1
+          fi
+
+          # Verify ArgoCD template variables are preserved
+          if ! grep -q "{{path.basename}}" "$YAML_FILE"; then
+            echo "❌ ArgoCD template variable {{path.basename}} not found in YAML"
+            exit 1
+          fi
+
+          if ! grep -q "{{path}}" "$YAML_FILE"; then
+            echo "❌ ArgoCD template variable {{path}} not found in YAML"
+            exit 1
+          fi
+
+          echo "✅ All YAML structure validations passed!"
+          echo "✅ ApplicationSet manifest is properly formatted"
+          echo "✅ Input values correctly mapped to output YAML"
+          echo "✅ ArgoCD template variables preserved"
