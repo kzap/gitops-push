@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: gitops-push-test-action
+  namespace: argocd
+spec:
+  generators:
+  - git:
+      repoURL: https://github.com/kzap/gitops-push.git
+      revision: 28/merge
+      directories:
+      - path: k8s/test-action/*
+  template:
+    metadata:
+      name: 'gitops-push-test-action-{{path.basename}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/kzap/gitops-push.git
+        targetRevision: 28/merge
+        path: '{{path}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: 'gitops-push-test-action-{{path.basename}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true
