@@ -1,141 +1,18 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
 import * as io from '@actions/io'
-import * as exec from '@actions/exec'
 import * as fs from 'fs'
 import * as path from 'path'
-import { generateFromTemplate } from './utils/template.js'
-
-/**
- * Parse the repository information from input.
- *
- * @param {string} repository - The repository string to parse
- * @returns {Object} Object containing gitopsOrg and gitopsRepoName
- */
-export function parseRepositoryInfo(repository) {
-  let gitopsOrg = ''
-  let gitopsRepoName = ''
-
-  if (repository.includes('/')) {
-    // If repository contains a slash, split it to get org and repo name
-    const parts = repository.split('/')
-    gitopsOrg = parts[0]
-    gitopsRepoName = parts[1]
-    core.debug(`Using provided repository: ${gitopsOrg}/${gitopsRepoName}`)
-  } else {
-    // If not, use the current repository's owner as the org
-    gitopsOrg = github.context.repo.owner
-    gitopsRepoName = repository
-    core.debug(`Using context owner: ${gitopsOrg}/${gitopsRepoName}`)
-  }
-
-  return { gitopsOrg, gitopsRepoName }
-}
-
-/**
- * Clone GitOps repository
- *
- * @param {string} token - GitHub token
- * @param {string} org - GitHub organization
- * @param {string} repo - Repository name
- * @param {string} branch - Branch name (optional)
- * @param {string} directory - Directory to clone into
- * @returns {Promise<void>}
- */
-async function cloneGitOpsRepo(token, org, repo, branch, directory) {
-  try {
-    // Clone the GitOps repository
-    const cloneUrl = `https://x-access-token:${token}@github.com/${org}/${repo}.git`
-    await exec.exec('git', ['clone', cloneUrl, directory])
-
-    // Checkout the target branch if specified, create it if it doesn't exist
-    if (branch) {
-      try {
-        await exec.exec('git', ['checkout', branch], { cwd: directory })
-      } catch (error) {
-        core.debug(`Branch ${branch} doesn't exist, creating new branch`)
-        await exec.exec('git', ['checkout', '-b', branch], { cwd: directory })
-      }
-    }
-
-    // Configure Git user for commits
-    await exec.exec('git', ['config', 'user.name', 'GitHub Action'], {
-      cwd: directory
-    })
-    await exec.exec('git', ['config', 'user.email', 'action@github.com'], {
-      cwd: directory
-    })
-
-    core.debug(`Successfully cloned ${org}/${repo} to ${directory}`)
-  } catch (error) {
-    throw new Error(`Failed to clone GitOps repository: ${error.message}`)
-  }
-}
-
-/**
- * Generate and write ApplicationSet manifest
- *
- * @param {string} applicationName - Application name
- * @param {string} environment - Environment name
- * @param {string} baseDir - Base directory for GitOps repo
- * @param {Object} templateData - Data for template generation
- * @returns {Promise<string>} Path to the generated manifest file
- */
-async function generateManifest(
-  applicationName,
-  environment,
-  baseDir,
-  templateData
-) {
-  try {
-    // Ensure the directory exists
-    const appsetDir = path.join(baseDir, 'applicationsets', applicationName)
-    await io.mkdirP(appsetDir)
-
-    // Generate manifest content
-    const manifestContent = await generateFromTemplate(
-      'applicationset',
-      templateData
-    )
-
-    // Write manifest file
-    const manifestPath = path.join(appsetDir, `${environment}.yml`)
-    await fs.promises.writeFile(manifestPath, manifestContent)
-
-    core.debug(`Generated manifest at ${manifestPath}`)
-    return manifestPath
-  } catch (error) {
-    throw new Error(`Failed to generate manifest: ${error.message}`)
-  }
-}
-
-/**
- * Commit and push changes to GitOps repository
- *
- * @param {string} directory - GitOps repository directory
- * @param {string} applicationName - Application name
- * @param {string} environment - Environment name
- * @param {string} branch - Branch name (optional)
- * @returns {Promise<void>}
- */
-async function commitAndPush(directory, applicationName, environment, branch) {
-  try {
-    // Add changes
-    await exec.exec('git', ['add', '.'], { cwd: directory })
-
-    // Create commit
-    const commitMessage = `Update ${applicationName} ApplicationSet for ${environment} environment`
-    await exec.exec('git', ['commit', '-m', commitMessage], { cwd: directory })
-
-    // Push changes
-    const pushBranch = branch || 'HEAD'
-    await exec.exec('git', ['push', 'origin', pushBranch], { cwd: directory })
-
-    core.debug(`Successfully pushed changes to ${pushBranch}`)
-  } catch (error) {
-    throw new Error(`Failed to commit and push changes: ${error.message}`)
-  }
-}
+import * as os from 'os'
+import {
+  generateCustomValuesYaml,
+  generateArgoCDAppManifest
+} from './utils/argocd-app-manifest'
+import {
+  parseRepositoryInfo,
+  cloneGitOpsRepo,
+  commitAndPush
+} from './utils/git'
 
 /**
  * The main function for the action.
@@ -143,9 +20,6 @@ async function commitAndPush(directory, applicationName, environment, branch) {
  * @returns {Promise<void>} Resolves when the action is complete.
  */
 export async function run() {
-  // Create a temporary directory for GitOps repo
-  const gitopsRepoBase = './gitops-repo-base'
-
   try {
     // Get inputs
     let gitopsRepository = core.getInput('gitops-repository', {
@@ -161,10 +35,15 @@ export async function run() {
       }
     }
     const gitopsToken = core.getInput('gitops-token', { required: true })
-    const gitopsBranch = core.getInput('gitops-branch', { required: false })
+    const gitopsBranch =
+      core.getInput('gitops-branch', { required: false }) || 'main'
     const environment = core.getInput('environment', { required: true })
     const applicationName =
       core.getInput('application-name') || github.context.repo.repo
+    const applicationManifestsPath = core.getInput(
+      'application-manifests-path',
+      { required: true }
+    )
 
     // Parse repository information
     const { gitopsOrg, gitopsRepoName } = parseRepositoryInfo(gitopsRepository)
@@ -185,9 +64,13 @@ export async function run() {
       `We are going to push [${environment}] ArgoCD ApplicationSet for [${applicationName}] to [${gitopsOrg}/${gitopsRepoName}] on the branch [${gitopsBranch || '[Using default branch]'}].`
     )
 
-    // Ensure the base directory exists and is empty
-    await io.rmRF(gitopsRepoBase)
-    await io.mkdirP(gitopsRepoBase)
+    // 0. Clone GitOps Repository, ensure it is a temporary directory and empty
+    const gitOpsRepoLocalPath = path.join(
+      os.tmpdir(),
+      `gitops-repo-${Date.now()}`
+    )
+    await io.rmRF(gitOpsRepoLocalPath)
+    await io.mkdirP(gitOpsRepoLocalPath)
 
     // Clone the GitOps repository
     await cloneGitOpsRepo(
@@ -195,29 +78,57 @@ export async function run() {
       gitopsOrg,
       gitopsRepoName,
       gitopsBranch,
-      gitopsRepoBase
+      gitOpsRepoLocalPath
     )
+
+    // 1. Create ArgoCD Manifest
 
     // Prepare template data for the ApplicationSet manifest
-    const templateData = {
-      appsetName: `${applicationName}-${environment}`,
+    customValues = core.getInput('custom-values', { required: false })
+    const valuesYaml = await generateCustomValuesYaml({
+      applicationName: applicationName,
       environment: environment,
-      sourceRepo: github.context.repo.repo,
-      sourceOrg: github.context.repo.owner,
-      sourceBranch: process.env.GITHUB_REF_NAME || 'main'
-    }
+      sourceRepo: gitopsRepoName,
+      sourceOrg: gitopsOrg,
+      sourceBranch: gitopsBranch,
+      customValues: customValues
+    })
 
     // Generate the manifest file
-    await generateManifest(
+    argocdAppManifest = await generateArgoCDAppManifest(
       applicationName,
       environment,
-      gitopsRepoBase,
-      templateData
+      gitOpsRepoLocalPath,
+      valuesYaml
     )
+
+    // 1c. Save argocd app manifest to a file
+    await fs.promises.writeFile(
+      path.join(
+        gitOpsRepoLocalPath,
+        'argocd-apps',
+        applicationName,
+        `${environment}.yml`
+      ),
+      argocdAppManifest
+    )
+
+    // 2. Copy application manifests to GitOps repository
+    await copyApplicationManifests(
+      applicationName,
+      environment,
+      gitOpsRepoLocalPath,
+      applicationManifestsPath
+    )
+
+    // 3. Post Summary to GitHub Step Summary
+
+    // 3a. Summary of the ArgoCD ApplicationSet
+    // 3b. Summary of the files copied to GitOps repository
 
     // Commit and push changes
     await commitAndPush(
-      gitopsRepoBase,
+      gitOpsRepoLocalPath,
       applicationName,
       environment,
       gitopsBranch

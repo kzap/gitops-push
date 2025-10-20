@@ -4,5 +4,5 @@
  */
 import { run } from './main.js'
 
-/* istanbul ignore next */
+/* eslint-disable-next-line no-unused-vars */
 run()
