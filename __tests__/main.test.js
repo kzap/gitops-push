@@ -58,7 +58,6 @@ const mockToolCache = {
 }
 jest.unstable_mockModule('@actions/tool-cache', () => mockToolCache)
 
-
 // The module being tested should be imported dynamically. This ensures that the
 // mocks are used in place of any actual dependencies.
 const { run } = await import('../dist/main.js')

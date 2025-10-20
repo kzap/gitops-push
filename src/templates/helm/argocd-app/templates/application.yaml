@@ -1,20 +1,56 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: {{ $.Values.applicationName | required "applicationName is required" }}
-  namespace: {{ $.Values.applicationNamespace | required "applicationNamespace is required" }}
+  name:
+    { { $.Values.applicationName | required "applicationName is required" } }
+  namespace:
+    {
+      {
+        $.Values.applicationNamespace | required "applicationNamespace is
+        required"
+      }
+    }
 spec:
-  project: {{ $.Values.application.project | required "project is required" }}
+  project: { { $.Values.application.project | required "project is required" } }
   source:
-    repoURL: {{ $.Values.application.source.repoURL | required "source.repoURL is required" }}
-    targetRevision: {{ $.Values.application.source.targetRevision | required "source.targetRevision is required" }}
-    path: {{ $.Values.application.source.path | required "source.path is required" }}
+    repoURL:
+      {
+        {
+          $.Values.application.source.repoURL | required "source.repoURL is
+          required"
+        }
+      }
+    targetRevision:
+      {
+        {
+          $.Values.application.source.targetRevision | required
+          "source.targetRevision is required"
+        }
+      }
+    path:
+      {
+        {
+          $.Values.application.source.path | required "source.path is required"
+        }
+      }
   destination:
-    server: {{ $.Values.application.destination.server | required "destination.server is required" }}
-    namespace: {{ $.Values.application.destination.namespace | required "destination.namespace is required" }}
+    server:
+      {
+        {
+          $.Values.application.destination.server | required "destination.server
+          is required"
+        }
+      }
+    namespace:
+      {
+        {
+          $.Values.application.destination.namespace | required
+          "destination.namespace is required"
+        }
+      }
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
-    - CreateNamespace=true
+      - CreateNamespace=true

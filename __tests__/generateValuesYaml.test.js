@@ -1,6 +1,8 @@
 import * as yaml from 'js-yaml'
 
-const { generateValuesYaml } = await import('../dist/utils/argocd-app-manifest.js')
+const { generateValuesYaml } = await import(
+  '../dist/utils/argocd-app-manifest.js'
+)
 
 describe('generateValuesYaml', () => {
   it('returns default values YAML when customValues is empty', async () => {
@@ -15,7 +17,9 @@ describe('generateValuesYaml', () => {
     const parsed = yaml.load(out)
     expect(parsed.applicationName).toBe('my-app-dev')
     expect(parsed.application.destination.namespace).toBe('my-app')
-    expect(parsed.application.source.repoURL).toContain('github.com/org/repo.git')
+    expect(parsed.application.source.repoURL).toContain(
+      'github.com/org/repo.git'
+    )
     expect(parsed.application.source.targetRevision).toBe('main')
     expect(parsed.application.source.path).toBe('my-app/dev/')
   })
@@ -34,6 +38,8 @@ describe('generateValuesYaml', () => {
     expect(parsed.application.destination.namespace).toBe('custom-ns')
     expect(parsed.application.source.targetRevision).toBe('feature/x')
     // unchanged defaults remain
-    expect(parsed.application.source.repoURL).toContain('github.com/org2/repo2.git')
+    expect(parsed.application.source.repoURL).toContain(
+      'github.com/org2/repo2.git'
+    )
   })
 })

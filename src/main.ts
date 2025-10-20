@@ -66,10 +66,7 @@ export async function run() {
     )
 
     // 0. Clone GitOps Repository, ensure it is a temporary directory and empty
-    gitOpsRepoLocalPath = path.join(
-      os.tmpdir(),
-      `gitops-repo-${Date.now()}`
-    )
+    gitOpsRepoLocalPath = path.join(os.tmpdir(), `gitops-repo-${Date.now()}`)
     await io.rmRF(gitOpsRepoLocalPath)
     await io.mkdirP(gitOpsRepoLocalPath)
 
