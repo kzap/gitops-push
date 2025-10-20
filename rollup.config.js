@@ -2,6 +2,7 @@
 
 import commonjs from '@rollup/plugin-commonjs'
 import { nodeResolve } from '@rollup/plugin-node-resolve'
+import typescript from '@rollup/plugin-typescript'
 
 const config = {
   input: 'src/index.js',
@@ -11,7 +12,11 @@ const config = {
     format: 'es',
     sourcemap: true
   },
-  plugins: [commonjs(), nodeResolve({ preferBuiltins: true })]
+  plugins: [
+    commonjs(),
+    nodeResolve({ preferBuiltins: true, extensions: ['.js', '.ts'] }),
+    typescript({ include: ['src/**/*.ts'] })
+  ]
 }
 
 export default config
