@@ -33996,138 +33996,78 @@ async function commitAndPush(directory, applicationName, environment, branch) {
  * @returns {Promise<void>} Resolves when the action is complete.
  */
 async function run() {
-  try {
-    // Get inputs
-    let gitopsRepository = coreExports.getInput('gitops-repository', {
-      required: false
-    });
-    // If gitops-repository is not provided via input, check environment variable
-    if (!gitopsRepository) {
-      gitopsRepository = process.env.GITOPS_REPOSITORY || '';
-      if (!gitopsRepository) {
-        throw new Error(
-          'gitops-repository input or GITOPS_REPOSITORY environment variable must be provided'
-        )
-      }
-    }
-    const gitopsToken = coreExports.getInput('gitops-token', { required: true });
-    const gitopsBranch =
-      coreExports.getInput('gitops-branch', { required: false }) || 'main';
-    const environment = coreExports.getInput('environment', { required: true });
-    const applicationName =
-      coreExports.getInput('application-name') || githubExports.context.repo.repo;
-    const applicationManifestsPath = coreExports.getInput(
-      'application-manifests-path',
-      { required: true }
-    );
-
-    // Parse repository information
-    const { gitopsOrg, gitopsRepoName } = parseRepositoryInfo(gitopsRepository);
-    coreExports.debug(`Repository parsed as: ${gitopsOrg}/${gitopsRepoName}`);
-
-    // Mask the token to prevent it from being logged
-    coreExports.setSecret(gitopsToken);
-    coreExports.debug('Token has been masked in logs');
-
-    // Log information (debug only)
-    coreExports.debug(`Git Organization: ${gitopsOrg}`);
-    coreExports.debug(`Git Repository: ${gitopsRepoName}`);
-    coreExports.debug(`Git Branch: ${gitopsBranch || '[Using default branch]'}`);
-    coreExports.debug(`Environment: ${environment}`);
-    coreExports.debug(`Application Name: ${applicationName}`);
-
-    coreExports.notice(
-      `We are going to push [${environment}] ArgoCD ApplicationSet for [${applicationName}] to [${gitopsOrg}/${gitopsRepoName}] on the branch [${gitopsBranch || '[Using default branch]'}].`
-    );
-
-    // 0. Clone GitOps Repository, ensure it is a temporary directory and empty
-    const gitOpsRepoLocalPath = path.join(
-      require$$0.tmpdir(),
-      `gitops-repo-${Date.now()}`
-    );
-    await ioExports.rmRF(gitOpsRepoLocalPath);
-    await ioExports.mkdirP(gitOpsRepoLocalPath);
-
-    // Clone the GitOps repository
-    await cloneGitOpsRepo(
-      gitopsToken,
-      gitopsOrg,
-      gitopsRepoName,
-      gitopsBranch,
-      gitOpsRepoLocalPath
-    );
-
-    // 1. Create ArgoCD Manifest
-
-    // Prepare template data for the ApplicationSet manifest
-    customValues = coreExports.getInput('custom-values', { required: false });
-    const valuesYaml = await generateCustomValuesYaml({
-      applicationName: applicationName,
-      environment: environment,
-      sourceRepo: gitopsRepoName,
-      sourceOrg: gitopsOrg,
-      sourceBranch: gitopsBranch,
-      customValues: customValues
-    });
-
-    // Generate the manifest file
-    argocdAppManifest = await generateArgoCDAppManifest(
-      applicationName,
-      environment,
-      gitOpsRepoLocalPath,
-      valuesYaml
-    );
-
-    // 1c. Save argocd app manifest to a file
-    await require$$1.promises.writeFile(
-      path.join(
-        gitOpsRepoLocalPath,
-        'argocd-apps',
-        applicationName,
-        `${environment}.yml`
-      ),
-      argocdAppManifest
-    );
-
-    // 2. Copy application manifests to GitOps repository
-    await copyApplicationManifests(
-      applicationName,
-      environment,
-      gitOpsRepoLocalPath,
-      applicationManifestsPath
-    );
-
-    // 3. Post Summary to GitHub Step Summary
-
-    // 3a. Summary of the ArgoCD ApplicationSet
-    // 3b. Summary of the files copied to GitOps repository
-
-    // Commit and push changes
-    await commitAndPush(
-      gitOpsRepoLocalPath,
-      applicationName,
-      environment,
-      gitopsBranch
-    );
-
-    coreExports.info(
-      `✅ Successfully updated ApplicationSet for ${applicationName} in ${environment} environment`
-    );
-
-    // Set outputs for other workflow steps to use
-    coreExports.setOutput('time', new Date().toTimeString());
-  } catch (error) {
-    // Clean up the temporary directory
+    let gitOpsRepoLocalPath = '';
     try {
-      await ioExports.rmRF(gitopsRepoBase);
-    } catch (cleanupError) {
-      // Ignore cleanup errors
-      coreExports.debug(`Failed to clean up directory: ${cleanupError.message}`);
+        // Get inputs
+        let gitopsRepository = coreExports.getInput('gitops-repository', {
+            required: false
+        });
+        // If gitops-repository is not provided via input, check environment variable
+        if (!gitopsRepository) {
+            gitopsRepository = process.env.GITOPS_REPOSITORY || '';
+            if (!gitopsRepository) {
+                throw new Error('gitops-repository input or GITOPS_REPOSITORY environment variable must be provided');
+            }
+        }
+        const gitopsToken = coreExports.getInput('gitops-token', { required: true });
+        const gitopsBranch = coreExports.getInput('gitops-branch', { required: false }) || 'main';
+        const environment = coreExports.getInput('environment', { required: true });
+        const applicationName = coreExports.getInput('application-name') || githubExports.context.repo.repo;
+        const applicationManifestsPath = coreExports.getInput('application-manifests-path', { required: true });
+        // Parse repository information
+        const { gitopsOrg, gitopsRepoName } = parseRepositoryInfo(gitopsRepository);
+        coreExports.debug(`Repository parsed as: ${gitopsOrg}/${gitopsRepoName}`);
+        // Mask the token to prevent it from being logged
+        coreExports.setSecret(gitopsToken);
+        coreExports.debug('Token has been masked in logs');
+        // Log information (debug only)
+        coreExports.debug(`Git Organization: ${gitopsOrg}`);
+        coreExports.debug(`Git Repository: ${gitopsRepoName}`);
+        coreExports.debug(`Git Branch: ${gitopsBranch || '[Using default branch]'}`);
+        coreExports.debug(`Environment: ${environment}`);
+        coreExports.debug(`Application Name: ${applicationName}`);
+        coreExports.notice(`We are going to push [${environment}] ArgoCD ApplicationSet for [${applicationName}] to [${gitopsOrg}/${gitopsRepoName}] on the branch [${gitopsBranch || '[Using default branch]'}].`);
+        // 0. Clone GitOps Repository, ensure it is a temporary directory and empty
+        gitOpsRepoLocalPath = path.join(require$$0.tmpdir(), `gitops-repo-${Date.now()}`);
+        await ioExports.rmRF(gitOpsRepoLocalPath);
+        await ioExports.mkdirP(gitOpsRepoLocalPath);
+        // Clone the GitOps repository
+        await cloneGitOpsRepo(gitopsToken, gitopsOrg, gitopsRepoName, gitopsBranch, gitOpsRepoLocalPath);
+        // 1. Create ArgoCD Manifest
+        // Prepare template data for the ApplicationSet manifest
+        const customValues = coreExports.getInput('custom-values', { required: false }) || '';
+        const valuesYaml = await generateCustomValuesYaml(applicationName, environment, gitopsRepoName, gitopsOrg, gitopsBranch, customValues);
+        // Generate the manifest file
+        const argocdAppManifest = await generateArgoCDAppManifest(applicationName, environment, valuesYaml);
+        // 1c. Save argocd app manifest to a file
+        const appDir = path.join(gitOpsRepoLocalPath, 'argocd-apps', applicationName);
+        await ioExports.mkdirP(appDir);
+        await require$$1.promises.writeFile(path.join(appDir, `${environment}.yml`), argocdAppManifest);
+        // 2. Copy application manifests to GitOps repository (skipped)
+        // 3. Post Summary to GitHub Step Summary
+        // 3a. Summary of the ArgoCD ApplicationSet
+        // 3b. Summary of the files copied to GitOps repository
+        // Commit and push changes
+        await commitAndPush(gitOpsRepoLocalPath, applicationName, environment, gitopsBranch);
+        coreExports.info(`✅ Successfully updated ApplicationSet for ${applicationName} in ${environment} environment`);
+        // Set outputs for other workflow steps to use
+        coreExports.setOutput('time', new Date().toTimeString());
     }
-
-    // Fail the workflow run if an error occurs
-    if (error instanceof Error) coreExports.setFailed(error.message);
-  }
+    catch (error) {
+        // Clean up the temporary directory
+        try {
+            await ioExports.rmRF(gitOpsRepoLocalPath);
+        }
+        catch (cleanupError) {
+            // Ignore cleanup errors
+            coreExports.debug(`Failed to clean up directory: ${cleanupError instanceof Error
+                ? cleanupError.message
+                : String(cleanupError)}`);
+        }
+        // Fail the workflow run if an error occurs
+        if (error instanceof Error)
+            coreExports.setFailed(error.message);
+    }
 }
 
 /**

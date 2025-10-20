@@ -20,6 +20,7 @@ import {
  * @returns {Promise<void>} Resolves when the action is complete.
  */
 export async function run() {
+  let gitOpsRepoLocalPath = ''
   try {
     // Get inputs
     let gitopsRepository = core.getInput('gitops-repository', {
@@ -65,7 +66,7 @@ export async function run() {
     )
 
     // 0. Clone GitOps Repository, ensure it is a temporary directory and empty
-    const gitOpsRepoLocalPath = path.join(
+    gitOpsRepoLocalPath = path.join(
       os.tmpdir(),
       `gitops-repo-${Date.now()}`
     )
@@ -84,42 +85,37 @@ export async function run() {
     // 1. Create ArgoCD Manifest
 
     // Prepare template data for the ApplicationSet manifest
-    customValues = core.getInput('custom-values', { required: false })
-    const valuesYaml = await generateCustomValuesYaml({
-      applicationName: applicationName,
-      environment: environment,
-      sourceRepo: gitopsRepoName,
-      sourceOrg: gitopsOrg,
-      sourceBranch: gitopsBranch,
-      customValues: customValues
-    })
-
-    // Generate the manifest file
-    argocdAppManifest = await generateArgoCDAppManifest(
+    const customValues =
+      core.getInput('custom-values', { required: false }) || ''
+    const valuesYaml = await generateCustomValuesYaml(
       applicationName,
       environment,
-      gitOpsRepoLocalPath,
+      gitopsRepoName,
+      gitopsOrg,
+      gitopsBranch,
+      customValues
+    )
+
+    // Generate the manifest file
+    const argocdAppManifest = await generateArgoCDAppManifest(
+      applicationName,
+      environment,
       valuesYaml
     )
 
     // 1c. Save argocd app manifest to a file
+    const appDir = path.join(
+      gitOpsRepoLocalPath,
+      'argocd-apps',
+      applicationName
+    )
+    await io.mkdirP(appDir)
     await fs.promises.writeFile(
-      path.join(
-        gitOpsRepoLocalPath,
-        'argocd-apps',
-        applicationName,
-        `${environment}.yml`
-      ),
+      path.join(appDir, `${environment}.yml`),
       argocdAppManifest
     )
 
-    // 2. Copy application manifests to GitOps repository
-    await copyApplicationManifests(
-      applicationName,
-      environment,
-      gitOpsRepoLocalPath,
-      applicationManifestsPath
-    )
+    // 2. Copy application manifests to GitOps repository (skipped)
 
     // 3. Post Summary to GitHub Step Summary
 
@@ -143,10 +139,16 @@ export async function run() {
   } catch (error) {
     // Clean up the temporary directory
     try {
-      await io.rmRF(gitopsRepoBase)
+      await io.rmRF(gitOpsRepoLocalPath)
     } catch (cleanupError) {
       // Ignore cleanup errors
-      core.debug(`Failed to clean up directory: ${cleanupError.message}`)
+      core.debug(
+        `Failed to clean up directory: ${
+          cleanupError instanceof Error
+            ? cleanupError.message
+            : String(cleanupError)
+        }`
+      )
     }
 
     // Fail the workflow run if an error occurs
