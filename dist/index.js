@@ -34074,7 +34074,6 @@ async function run() {
  * The entrypoint for the action. This file simply imports and runs the action's
  * main logic.
  */
-
 /* eslint-disable-next-line no-unused-vars */
 run();
 //# sourceMappingURL=index.js.map
