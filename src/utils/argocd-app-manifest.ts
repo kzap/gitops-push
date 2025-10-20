@@ -3,8 +3,10 @@ import { fetchTcTool } from './tools'
 import * as path from 'path'
 import * as fs from 'fs'
 import * as os from 'os'
+import * as yaml from 'js-yaml'
+import _ from 'lodash'
 
-export async function generateCustomValuesYaml(
+export async function generateValuesYaml(
   applicationName: string,
   environment: string,
   sourceRepo: string,
@@ -12,19 +14,36 @@ export async function generateCustomValuesYaml(
   sourceBranch: string,
   customValues: string
 ): Promise<string> {
-  return `
-  apiVersion: argoproj.io/v1alpha1
-  kind: Application
-  metadata:
-    name: ${applicationName}
-    namespace: argocd
-  spec:
-    project: default
-    source:
-      repoURL: https://github.com/${sourceOrg}/${sourceRepo}.git
-      targetRevision: ${sourceBranch}
-      path: k8s/${environment}
-  `
+  // define defaultValues YAML object as a JSON object
+  const defaultValues: Record<string, any> = {
+    applicationName: `${applicationName}-${environment}`,
+    application: {
+      destination: {
+        namespace: applicationName
+      },
+      source: {
+        repoURL: `https://github.com/${sourceOrg}/${sourceRepo}.git`,
+        targetRevision: sourceBranch,
+        path: `${applicationName}/${environment}/`
+      }
+    }
+  }
+
+  // if customValues is not provided, return defaultValues
+  if (!customValues) {
+    return yaml.dump(defaultValues)
+  }
+
+  // parse customValues as YAML object
+  try {
+    const customValuesYaml = yaml.load(customValues)
+
+    // merge defaultValues and customValues using lodash merge
+    const mergedValues = _.merge(defaultValues, customValuesYaml)
+    return yaml.dump(mergedValues)
+  } catch (error) {
+    throw new Error(`Invalid custom values YAML: ${error}`)
+  }
 }
 
 export async function generateArgoCDAppManifest(

@@ -5,7 +5,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import {
-  generateCustomValuesYaml,
+  generateValuesYaml,
   generateArgoCDAppManifest
 } from './utils/argocd-app-manifest'
 import {
@@ -87,7 +87,7 @@ export async function run() {
     // Prepare template data for the ApplicationSet manifest
     const customValues =
       core.getInput('custom-values', { required: false }) || ''
-    const valuesYaml = await generateCustomValuesYaml(
+    const valuesYaml = await generateValuesYaml(
       applicationName,
       environment,
       gitopsRepoName,
