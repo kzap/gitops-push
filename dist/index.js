@@ -1,10 +1,13 @@
-import * as core from '@actions/core';
-import * as github from '@actions/github';
-import * as io from '@actions/io';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-import * as exec from '@actions/exec';
+import { run } from './main.js';
+
+/**
+ * The entrypoint for the action. This file simply imports and runs the action's
+ * main logic.
+ */
+/* eslint-disable-next-line no-unused-vars */
+run();
+//# sourceMappingURL=index.js.map
+tions/exec';
 import * as tc from '@actions/tool-cache';
 import * as yaml from 'js-yaml';
 import _ from 'lodash';
@@ -87,22 +90,27 @@ async function generateArgoCDAppManifest(applicationName, environment, customVal
     // store custom values yaml in a temporary file
     const customValuesFilePath = path.join(os.tmpdir(), 'custom-values.yaml');
     await fs.promises.writeFile(customValuesFilePath, customValuesYaml);
+    // path to the helm chart
+    const chartPath = path.join(path.dirname(new URL(import.meta.url).pathname), '../templates/helm/argocd-app');
+    // capture stdout from helm template command
+    let stdout = '';
+    let stderr = '';
+    const options = {
+        listeners: {
+            stdout: (data) => {
+                stdout += data.toString();
+            },
+            stderr: (data) => {
+                stderr += data.toString();
+            }
+        }
+    };
     // render the manifest using helm template
-    await exec.exec('helm', [
-        'template',
-        '.',
-        '-f',
-        customValuesFilePath
-    ]);
-    return `
-  apiVersion: argoproj.io/v1alpha1
-  kind: Application
-  metadata:
-    name: ${applicationName}
-    namespace: argocd
-  spec:
-    project: default
-  `;
+    const exitCode = await exec.exec('helm', ['template', applicationName, chartPath, '-f', customValuesFilePath], options);
+    if (exitCode !== 0) {
+        throw new Error(`helm template failed with exit code ${exitCode}: ${stderr}`);
+    }
+    return stdout.trim();
 }
 
 /**
