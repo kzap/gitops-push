@@ -1,7 +1,6 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import * as io from '@actions/io';
-import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { generateValuesYaml, generateArgoCDAppManifest } from './utils/argocd-app-manifest.js';
@@ -58,16 +57,8 @@ async function run() {
         const valuesYaml = await generateValuesYaml(applicationName, environment, gitopsRepoName, gitopsOrg, gitopsBranch, customValues);
         // Generate the manifest file
         const argocdAppManifest = await generateArgoCDAppManifest(applicationName, environment, valuesYaml, argoCDAppHelmChart);
-        // 1c. Save argocd app manifest to a file
-        const appDir = path.join(gitOpsRepoLocalPath, 'argocd-apps', applicationName);
-        await io.mkdirP(appDir);
-        await fs.promises.writeFile(path.join(appDir, `${environment}.yml`), argocdAppManifest);
-        // 2. Copy application manifests to GitOps repository (skipped)
-        // 3. Post Summary to GitHub Step Summary
-        // 3a. Summary of the ArgoCD ApplicationSet
-        // 3b. Summary of the files copied to GitOps repository
-        // Commit and push changes
-        await commitAndPush(gitOpsRepoLocalPath, applicationName, environment, gitopsBranch);
+        // Commit and push changes - this will organize files into applicationName/environment/
+        await commitAndPush(gitOpsRepoLocalPath, applicationName, environment, gitopsBranch, argocdAppManifest, applicationManifestsPath);
         core.info(`✅ Successfully updated ApplicationSet for ${applicationName} in ${environment} environment`);
         // Set outputs for other workflow steps to use
         core.setOutput('time', new Date().toTimeString());

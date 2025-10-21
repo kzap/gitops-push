@@ -27,13 +27,20 @@ jest.unstable_mockModule('@actions/github', () => ({
 // Mock @actions/io
 const mockIo = {
   mkdirP: jest.fn().mockImplementation(() => Promise.resolve()),
-  rmRF: jest.fn().mockImplementation(() => Promise.resolve())
+  rmRF: jest.fn().mockImplementation(() => Promise.resolve()),
+  cp: jest.fn().mockImplementation(() => Promise.resolve())
 }
 jest.unstable_mockModule('@actions/io', () => mockIo)
 
 // Mock @actions/exec
 const mockExec = {
-  exec: jest.fn().mockImplementation(() => Promise.resolve(0))
+  exec: jest.fn().mockImplementation((cmd, args) => {
+    // Mock git diff to indicate changes exist (non-zero exit = has changes)
+    if (args && args.includes('diff')) {
+      return Promise.reject(new Error('Has changes'))
+    }
+    return Promise.resolve(0)
+  })
 }
 jest.unstable_mockModule('@actions/exec', () => mockExec)
 
@@ -44,8 +51,10 @@ const mockFs = {
     writeFile: jest.fn().mockImplementation(() => Promise.resolve()),
     readFile: jest
       .fn()
-      .mockImplementation(() => Promise.resolve('template content'))
-  }
+      .mockImplementation(() => Promise.resolve('template content')),
+    readdir: jest.fn().mockResolvedValue([])
+  },
+  existsSync: jest.fn().mockReturnValue(true)
 }
 jest.unstable_mockModule('fs', () => mockFs)
 

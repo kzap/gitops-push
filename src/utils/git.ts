@@ -1,6 +1,9 @@
 import * as exec from '@actions/exec'
 import * as core from '@actions/core'
 import * as github from '@actions/github'
+import * as fs from 'fs'
+import * as path from 'path'
+import * as io from '@actions/io'
 
 /**
  * Parse the repository information from input.
@@ -85,27 +88,117 @@ export async function cloneGitOpsRepo(
  * @param {string} applicationName - Application name
  * @param {string} environment - Environment name
  * @param {string} branch - Branch name (optional)
+ * @param {string} argocdAppManifestContent - ArgoCD application manifest content
+ * @param {string} applicationManifestsPath - Path to application manifests directory
  * @returns {Promise<void>}
  */
 export async function commitAndPush(
   directory: string,
   applicationName: string,
   environment: string,
-  branch: string
+  branch: string,
+  argocdAppManifestContent: string,
+  applicationManifestsPath: string
 ) {
   try {
+    // Create the target directory structure: applicationName/environment/
+    const targetDir = path.join(directory, applicationName, environment)
+    await io.mkdirP(targetDir)
+    core.debug(`Created directory: ${targetDir}`)
+
+    // Write the ArgoCD application manifest to the target directory
+    const argocdManifestPath = path.join(targetDir, 'application.yaml')
+    await fs.promises.writeFile(argocdManifestPath, argocdAppManifestContent)
+    core.debug(`Wrote ArgoCD manifest to: ${argocdManifestPath}`)
+
+    // Copy application manifests from applicationManifestsPath to target directory
+    if (fs.existsSync(applicationManifestsPath)) {
+      const files = await fs.promises.readdir(applicationManifestsPath, {
+        withFileTypes: true
+      })
+
+      for (const file of files) {
+        const sourcePath = path.join(applicationManifestsPath, file.name)
+        const destPath = path.join(targetDir, file.name)
+
+        if (file.isDirectory()) {
+          // Recursively copy directory
+          await io.cp(sourcePath, destPath, { recursive: true })
+          core.debug(`Copied directory: ${sourcePath} -> ${destPath}`)
+        } else {
+          // Copy file
+          await io.cp(sourcePath, destPath)
+          core.debug(`Copied file: ${sourcePath} -> ${destPath}`)
+        }
+      }
+    } else {
+      core.warning(
+        `Application manifests path does not exist: ${applicationManifestsPath}`
+      )
+    }
+
     // Add changes
     await exec.exec('git', ['add', '.'], { cwd: directory })
 
-    // Create commit
-    const commitMessage = `Update ${applicationName} ApplicationSet for ${environment} environment`
+    // Check if there are any changes to commit
+    let hasChanges = false
+    await exec
+      .exec('git', ['diff', '--cached', '--quiet'], {
+        cwd: directory,
+        ignoreReturnCode: true,
+        listeners: {
+          stdout: () => {},
+          stderr: () => {},
+          errline: () => {}
+        }
+      })
+      .then(
+        () => {
+          hasChanges = false
+        },
+        () => {
+          hasChanges = true
+        }
+      )
+
+    if (!hasChanges) {
+      core.info('No changes to commit')
+      return
+    }
+
+    // Create commit with detailed message
+    const commitMessage = `Deploy ${applicationName} to ${environment}
+
+Updated deployment manifests for ${applicationName} in ${environment} environment.
+- ArgoCD application manifest
+- Application manifests from ${path.basename(applicationManifestsPath)}`
+
     await exec.exec('git', ['commit', '-m', commitMessage], { cwd: directory })
 
-    // Push changes
+    // Push changes with retry logic
     const pushBranch = branch || 'HEAD'
-    await exec.exec('git', ['push', 'origin', pushBranch], { cwd: directory })
+    const maxRetries = 4
+    const retryDelays = [2000, 4000, 8000, 16000] // exponential backoff in ms
 
-    core.debug(`Successfully pushed changes to ${pushBranch}`)
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        await exec.exec('git', ['push', '-u', 'origin', pushBranch], {
+          cwd: directory
+        })
+        core.debug(`Successfully pushed changes to ${pushBranch}`)
+        return
+      } catch (error) {
+        if (attempt < maxRetries) {
+          const delay = retryDelays[attempt]
+          core.warning(
+            `Push failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay / 1000}s...`
+          )
+          await new Promise((resolve) => setTimeout(resolve, delay))
+        } else {
+          throw error
+        }
+      }
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     throw new Error(`Failed to commit and push changes: ${message}`)

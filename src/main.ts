@@ -104,31 +104,14 @@ export async function run() {
       argoCDAppHelmChart
     )
 
-    // 1c. Save argocd app manifest to a file
-    const appDir = path.join(
-      gitOpsRepoLocalPath,
-      'argocd-apps',
-      applicationName
-    )
-    await io.mkdirP(appDir)
-    await fs.promises.writeFile(
-      path.join(appDir, `${environment}.yml`),
-      argocdAppManifest
-    )
-
-    // 2. Copy application manifests to GitOps repository (skipped)
-
-    // 3. Post Summary to GitHub Step Summary
-
-    // 3a. Summary of the ArgoCD ApplicationSet
-    // 3b. Summary of the files copied to GitOps repository
-
-    // Commit and push changes
+    // Commit and push changes - this will organize files into applicationName/environment/
     await commitAndPush(
       gitOpsRepoLocalPath,
       applicationName,
       environment,
-      gitopsBranch
+      gitopsBranch,
+      argocdAppManifest,
+      applicationManifestsPath
     )
 
     core.info(
