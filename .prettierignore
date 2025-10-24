@@ -4,3 +4,5 @@ dist/
 node_modules/
 coverage/
 *.hbs
+__fixtures__/
+src/templates/helm/

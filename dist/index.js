@@ -1,14 +1,11 @@
-import { run } from './main.js';
-
-/**
- * The entrypoint for the action. This file simply imports and runs the action's
- * main logic.
- */
-/* eslint-disable-next-line no-unused-vars */
-run();
-//# sourceMappingURL=index.js.map
-tions/exec';
+import * as core from '@actions/core';
+import * as github from '@actions/github';
+import * as io from '@actions/io';
+import * as path from 'path';
+import * as os from 'os';
+import * as exec from '@actions/exec';
 import * as tc from '@actions/tool-cache';
+import * as fs from 'fs';
 import * as yaml from 'js-yaml';
 import _ from 'lodash';
 
@@ -215,19 +212,96 @@ async function cloneGitOpsRepo(token, org, repo, branch, directory) {
  * @param {string} applicationName - Application name
  * @param {string} environment - Environment name
  * @param {string} branch - Branch name (optional)
+ * @param {string} argocdAppManifestContent - ArgoCD application manifest content
+ * @param {string} applicationManifestsPath - Path to application manifests directory
  * @returns {Promise<void>}
  */
-async function commitAndPush(directory, applicationName, environment, branch) {
+async function commitAndPush(directory, applicationName, environment, branch, argocdAppManifestContent, applicationManifestsPath) {
     try {
+        // Create the target directory structure: applicationName/environment/
+        const targetDir = path.join(directory, applicationName, environment);
+        await io.mkdirP(targetDir);
+        core.debug(`Created directory: ${targetDir}`);
+        // Write the ArgoCD application manifest to the target directory
+        const argocdManifestPath = path.join(targetDir, 'application.yaml');
+        await fs.promises.writeFile(argocdManifestPath, argocdAppManifestContent);
+        core.debug(`Wrote ArgoCD manifest to: ${argocdManifestPath}`);
+        // Copy application manifests from applicationManifestsPath to target directory
+        if (fs.existsSync(applicationManifestsPath)) {
+            const files = await fs.promises.readdir(applicationManifestsPath, {
+                withFileTypes: true
+            });
+            for (const file of files) {
+                const sourcePath = path.join(applicationManifestsPath, file.name);
+                const destPath = path.join(targetDir, file.name);
+                if (file.isDirectory()) {
+                    // Recursively copy directory
+                    await io.cp(sourcePath, destPath, { recursive: true });
+                    core.debug(`Copied directory: ${sourcePath} -> ${destPath}`);
+                }
+                else {
+                    // Copy file
+                    await io.cp(sourcePath, destPath);
+                    core.debug(`Copied file: ${sourcePath} -> ${destPath}`);
+                }
+            }
+        }
+        else {
+            core.warning(`Application manifests path does not exist: ${applicationManifestsPath}`);
+        }
         // Add changes
         await exec.exec('git', ['add', '.'], { cwd: directory });
-        // Create commit
-        const commitMessage = `Update ${applicationName} ApplicationSet for ${environment} environment`;
+        // Check if there are any changes to commit
+        let hasChanges = false;
+        await exec
+            .exec('git', ['diff', '--cached', '--quiet'], {
+            cwd: directory,
+            ignoreReturnCode: true,
+            listeners: {
+                stdout: () => { },
+                stderr: () => { },
+                errline: () => { }
+            }
+        })
+            .then(() => {
+            hasChanges = false;
+        }, () => {
+            hasChanges = true;
+        });
+        if (!hasChanges) {
+            core.info('No changes to commit');
+            return;
+        }
+        // Create commit with detailed message
+        const commitMessage = `Deploy ${applicationName} to ${environment}
+
+Updated deployment manifests for ${applicationName} in ${environment} environment.
+- ArgoCD application manifest
+- Application manifests from ${path.basename(applicationManifestsPath)}`;
         await exec.exec('git', ['commit', '-m', commitMessage], { cwd: directory });
-        // Push changes
+        // Push changes with retry logic
         const pushBranch = branch || 'HEAD';
-        await exec.exec('git', ['push', 'origin', pushBranch], { cwd: directory });
-        core.debug(`Successfully pushed changes to ${pushBranch}`);
+        const maxRetries = 4;
+        const retryDelays = [2000, 4000, 8000, 16000]; // exponential backoff in ms
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                await exec.exec('git', ['push', '-u', 'origin', pushBranch], {
+                    cwd: directory
+                });
+                core.debug(`Successfully pushed changes to ${pushBranch}`);
+                return;
+            }
+            catch (error) {
+                if (attempt < maxRetries) {
+                    const delay = retryDelays[attempt];
+                    core.warning(`Push failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delay / 1000}s...`);
+                    await new Promise((resolve) => setTimeout(resolve, delay));
+                }
+                else {
+                    throw error;
+                }
+            }
+        }
     }
     catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -286,16 +360,8 @@ async function run() {
         const valuesYaml = await generateValuesYaml(applicationName, environment, gitopsRepoName, gitopsOrg, gitopsBranch, customValues);
         // Generate the manifest file
         const argocdAppManifest = await generateArgoCDAppManifest(applicationName, environment, valuesYaml, argoCDAppHelmChart);
-        // 1c. Save argocd app manifest to a file
-        const appDir = path.join(gitOpsRepoLocalPath, 'argocd-apps', applicationName);
-        await io.mkdirP(appDir);
-        await fs.promises.writeFile(path.join(appDir, `${environment}.yml`), argocdAppManifest);
-        // 2. Copy application manifests to GitOps repository (skipped)
-        // 3. Post Summary to GitHub Step Summary
-        // 3a. Summary of the ArgoCD ApplicationSet
-        // 3b. Summary of the files copied to GitOps repository
-        // Commit and push changes
-        await commitAndPush(gitOpsRepoLocalPath, applicationName, environment, gitopsBranch);
+        // Commit and push changes - this will organize files into applicationName/environment/
+        await commitAndPush(gitOpsRepoLocalPath, applicationName, environment, gitopsBranch, argocdAppManifest, applicationManifestsPath);
         core.info(`✅ Successfully updated ApplicationSet for ${applicationName} in ${environment} environment`);
         // Set outputs for other workflow steps to use
         core.setOutput('time', new Date().toTimeString());
