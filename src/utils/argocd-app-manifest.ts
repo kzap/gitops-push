@@ -49,7 +49,8 @@ export async function generateValuesYaml(
 export async function generateArgoCDAppManifest(
   applicationName: string,
   environment: string,
-  customValuesYaml: string
+  customValuesYaml: string,
+  argoCDAppHelmChart: string
 ): Promise<string> {
   // download helm tool using tc cache
   await fetchTcTool('helm')
@@ -58,11 +59,18 @@ export async function generateArgoCDAppManifest(
   const customValuesFilePath = path.join(os.tmpdir(), 'custom-values.yaml')
   await fs.promises.writeFile(customValuesFilePath, customValuesYaml)
 
-  // path to the helm chart
-  const chartPath = path.join(
-    path.dirname(new URL(import.meta.url).pathname),
-    '../templates/helm/argocd-app'
-  )
+  // resolve and validate path to the helm chart
+  const baseDir = path.dirname(new URL(import.meta.url).pathname)
+  const resolvedChartPath = path.isAbsolute(argoCDAppHelmChart)
+    ? argoCDAppHelmChart
+    : path.resolve(baseDir, argoCDAppHelmChart)
+
+  const chartYamlPath = path.join(resolvedChartPath, 'Chart.yaml')
+  try {
+    await fs.promises.readFile(chartYamlPath)
+  } catch {
+    throw new Error(`we cant find helm chart in path given: ${chartYamlPath}`)
+  }
 
   // capture stdout from helm template command
   let stdout = ''
@@ -81,7 +89,13 @@ export async function generateArgoCDAppManifest(
   // render the manifest using helm template
   const exitCode = await exec.exec(
     'helm',
-    ['template', applicationName, chartPath, '-f', customValuesFilePath],
+    [
+      'template',
+      applicationName,
+      resolvedChartPath,
+      '-f',
+      customValuesFilePath
+    ],
     options
   )
 

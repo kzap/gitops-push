@@ -32,6 +32,11 @@ inputs:
       Name of the application (defaults to the current repository name if not
       specified)
     required: false
+  argocd-app-helm-chart:
+    description:
+      Optional path to ArgoCD Application Helm chart (default
+      '../templates/helm/argocd-app')
+    required: false
 
 # Define your outputs here.
 outputs:

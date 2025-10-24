@@ -29,6 +29,8 @@ async function run() {
         const gitopsToken = core.getInput('gitops-token', { required: true });
         const gitopsBranch = core.getInput('gitops-branch', { required: false }) || 'main';
         const environment = core.getInput('environment', { required: true });
+        const argoCDAppHelmChart = core.getInput('argocd-app-helm-chart', { required: false }) ||
+            '../templates/helm/argocd-app';
         const applicationName = core.getInput('application-name') || github.context.repo.repo;
         const applicationManifestsPath = core.getInput('application-manifests-path', { required: true });
         // Parse repository information
@@ -55,7 +57,7 @@ async function run() {
         const customValues = core.getInput('custom-values', { required: false }) || '';
         const valuesYaml = await generateValuesYaml(applicationName, environment, gitopsRepoName, gitopsOrg, gitopsBranch, customValues);
         // Generate the manifest file
-        const argocdAppManifest = await generateArgoCDAppManifest(applicationName, environment, valuesYaml);
+        const argocdAppManifest = await generateArgoCDAppManifest(applicationName, environment, valuesYaml, argoCDAppHelmChart);
         // 1c. Save argocd app manifest to a file
         const appDir = path.join(gitOpsRepoLocalPath, 'argocd-apps', applicationName);
         await io.mkdirP(appDir);

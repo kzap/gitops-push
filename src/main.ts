@@ -39,6 +39,9 @@ export async function run() {
     const gitopsBranch =
       core.getInput('gitops-branch', { required: false }) || 'main'
     const environment = core.getInput('environment', { required: true })
+    const argoCDAppHelmChart =
+      core.getInput('argocd-app-helm-chart', { required: false }) ||
+      '../templates/helm/argocd-app'
     const applicationName =
       core.getInput('application-name') || github.context.repo.repo
     const applicationManifestsPath = core.getInput(
@@ -97,7 +100,8 @@ export async function run() {
     const argocdAppManifest = await generateArgoCDAppManifest(
       applicationName,
       environment,
-      valuesYaml
+      valuesYaml,
+      argoCDAppHelmChart
     )
 
     // 1c. Save argocd app manifest to a file
