@@ -7,6 +7,7 @@
  */
 import { jest } from '@jest/globals'
 import * as core from '../__fixtures__/core.js'
+import * as path from 'path'
 
 // Mocks should be declared before the module being tested is imported.
 jest.unstable_mockModule('@actions/core', () => core)
@@ -72,7 +73,13 @@ describe('main.js', () => {
       'gitops-branch': 'main',
       'application-manifests-path': 'k8s',
       environment: 'production',
-      'application-name': 'test-app'
+      'application-name': 'test-app',
+      'argocd-app-helm-chart': path.resolve(
+        path.join(
+          path.dirname(new URL(import.meta.url).pathname),
+          '../__fixtures__/helm/argocd-app'
+        )
+      )
     }
 
     core.getInput.mockImplementation((name) => mockInputs[name] || '')

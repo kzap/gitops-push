@@ -1,5 +1,6 @@
 import * as tc from '@actions/tool-cache'
 import * as core from '@actions/core'
+import * as path from 'path'
 
 type SupportedTool = 'helm'
 type PlatformSubset = Extract<NodeJS.Platform, 'linux' | 'darwin' | 'win32'>
@@ -10,12 +11,9 @@ const toolDownloadUrl: Record<
 > = {
   helm: {
     latest: {
-      linux:
-        'https://github.com/helm/helm/releases/latest/download/helm-linux-amd64.tar.gz',
-      darwin:
-        'https://github.com/helm/helm/releases/latest/download/helm-darwin-amd64.tar.gz',
-      win32:
-        'https://github.com/helm/helm/releases/latest/download/helm-windows-amd64.zip'
+      linux: 'https://get.helm.sh/helm-v3.14.4-linux-amd64.tar.gz',
+      darwin: 'https://get.helm.sh/helm-v3.14.4-darwin-amd64.tar.gz',
+      win32: 'https://get.helm.sh/helm-v3.14.4-windows-amd64.zip'
     }
   }
 }
@@ -24,6 +22,13 @@ export async function fetchTcTool(
   tool: SupportedTool,
   version: string = 'latest'
 ): Promise<boolean> {
+  // Ensure runner envs exist for tool-cache when running outside GitHub Actions
+  if (!process.env.RUNNER_TOOL_CACHE) {
+    process.env.RUNNER_TOOL_CACHE = `${process.cwd()}/.runner_tool_cache`
+  }
+  if (!process.env.RUNNER_TEMP) {
+    process.env.RUNNER_TEMP = `${process.cwd()}/.runner_temp`
+  }
   const platform = process.platform as PlatformSubset
   const toolDirectory = tc.find(tool, version, platform)
   if (toolDirectory) {
@@ -56,11 +61,21 @@ export async function fetchTcTool(
   }
 
   // download the tool using tc cache
-  const downloadUrl = toolDownloadUrl[tool][version][platform]
-  const downloadPath = await tc.downloadTool(downloadUrl)
-  const extractedPath = await tc.extractTar(downloadPath)
+  let downloadUrl = toolDownloadUrl[tool][version][platform]
+  const arch = process.arch
+  const archLabel = arch === 'x64' ? 'amd64' : arch === 'arm64' ? 'arm64' : arch
+  // Replace architecture segment in URL if needed
+  downloadUrl = downloadUrl.replace('amd64', archLabel)
 
-  const cachedPath = await tc.cacheDir(extractedPath, tool, version)
+  const downloadPath = await tc.downloadTool(downloadUrl)
+  const isZip = downloadUrl.endsWith('.zip')
+  const extractedPath = isZip
+    ? await tc.extractZip(downloadPath)
+    : await tc.extractTar(downloadPath)
+
+  const platformName = platform === 'win32' ? 'windows' : platform
+  const binaryDir = path.join(extractedPath, `${platformName}-${archLabel}`)
+  const cachedPath = await tc.cacheDir(binaryDir, tool, version)
   core.addPath(cachedPath)
   core.info(`Tool ${tool} version ${version} has been cached in ${cachedPath}`)
   return true

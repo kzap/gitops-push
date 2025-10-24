@@ -1,10 +1,13 @@
-import * as core from '@actions/core';
-import * as github from '@actions/github';
-import * as io from '@actions/io';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-import * as exec from '@actions/exec';
+import { run } from './main.js';
+
+/**
+ * The entrypoint for the action. This file simply imports and runs the action's
+ * main logic.
+ */
+/* eslint-disable-next-line no-unused-vars */
+run();
+//# sourceMappingURL=index.js.map
+tions/exec';
 import * as tc from '@actions/tool-cache';
 import * as yaml from 'js-yaml';
 import _ from 'lodash';
@@ -12,13 +15,20 @@ import _ from 'lodash';
 const toolDownloadUrl = {
     helm: {
         latest: {
-            linux: 'https://github.com/helm/helm/releases/latest/download/helm-linux-amd64.tar.gz',
-            darwin: 'https://github.com/helm/helm/releases/latest/download/helm-darwin-amd64.tar.gz',
-            win32: 'https://github.com/helm/helm/releases/latest/download/helm-windows-amd64.zip'
+            linux: 'https://get.helm.sh/helm-v3.14.4-linux-amd64.tar.gz',
+            darwin: 'https://get.helm.sh/helm-v3.14.4-darwin-amd64.tar.gz',
+            win32: 'https://get.helm.sh/helm-v3.14.4-windows-amd64.zip'
         }
     }
 };
 async function fetchTcTool(tool, version = 'latest') {
+    // Ensure runner envs exist for tool-cache when running outside GitHub Actions
+    if (!process.env.RUNNER_TOOL_CACHE) {
+        process.env.RUNNER_TOOL_CACHE = `${process.cwd()}/.runner_tool_cache`;
+    }
+    if (!process.env.RUNNER_TEMP) {
+        process.env.RUNNER_TEMP = `${process.cwd()}/.runner_temp`;
+    }
     const platform = process.platform;
     const toolDirectory = tc.find(tool, version, platform);
     if (toolDirectory) {
@@ -42,10 +52,19 @@ async function fetchTcTool(tool, version = 'latest') {
         throw new Error(`No download url found for tool: ${tool} version: ${version} on platform: ${platform}`);
     }
     // download the tool using tc cache
-    const downloadUrl = toolDownloadUrl[tool][version][platform];
+    let downloadUrl = toolDownloadUrl[tool][version][platform];
+    const arch = process.arch;
+    const archLabel = arch === 'x64' ? 'amd64' : arch === 'arm64' ? 'arm64' : arch;
+    // Replace architecture segment in URL if needed
+    downloadUrl = downloadUrl.replace('amd64', archLabel);
     const downloadPath = await tc.downloadTool(downloadUrl);
-    const extractedPath = await tc.extractTar(downloadPath);
-    const cachedPath = await tc.cacheDir(extractedPath, tool, version);
+    const isZip = downloadUrl.endsWith('.zip');
+    const extractedPath = isZip
+        ? await tc.extractZip(downloadPath)
+        : await tc.extractTar(downloadPath);
+    const platformName = platform === 'win32' ? 'windows' : platform;
+    const binaryDir = path.join(extractedPath, `${platformName}-${archLabel}`);
+    const cachedPath = await tc.cacheDir(binaryDir, tool, version);
     core.addPath(cachedPath);
     core.info(`Tool ${tool} version ${version} has been cached in ${cachedPath}`);
     return true;
@@ -81,28 +100,49 @@ async function generateValuesYaml(applicationName, environment, sourceRepo, sour
         throw new Error(`Invalid custom values YAML: ${error}`);
     }
 }
-async function generateArgoCDAppManifest(applicationName, environment, customValuesYaml) {
+async function generateArgoCDAppManifest(applicationName, environment, customValuesYaml, argoCDAppHelmChart) {
     // download helm tool using tc cache
     await fetchTcTool('helm');
     // store custom values yaml in a temporary file
     const customValuesFilePath = path.join(os.tmpdir(), 'custom-values.yaml');
     await fs.promises.writeFile(customValuesFilePath, customValuesYaml);
+    // resolve and validate path to the helm chart
+    const baseDir = path.dirname(new URL(import.meta.url).pathname);
+    const resolvedChartPath = path.isAbsolute(argoCDAppHelmChart)
+        ? argoCDAppHelmChart
+        : path.resolve(baseDir, argoCDAppHelmChart);
+    const chartYamlPath = path.join(resolvedChartPath, 'Chart.yaml');
+    try {
+        await fs.promises.readFile(chartYamlPath);
+    }
+    catch {
+        throw new Error(`we cant find helm chart in path given: ${chartYamlPath}`);
+    }
+    // capture stdout from helm template command
+    let stdout = '';
+    let stderr = '';
+    const options = {
+        listeners: {
+            stdout: (data) => {
+                stdout += data.toString();
+            },
+            stderr: (data) => {
+                stderr += data.toString();
+            }
+        }
+    };
     // render the manifest using helm template
-    await exec.exec('helm', [
+    const exitCode = await exec.exec('helm', [
         'template',
-        '.',
+        applicationName,
+        resolvedChartPath,
         '-f',
         customValuesFilePath
-    ]);
-    return `
-  apiVersion: argoproj.io/v1alpha1
-  kind: Application
-  metadata:
-    name: ${applicationName}
-    namespace: argocd
-  spec:
-    project: default
-  `;
+    ], options);
+    if (exitCode !== 0) {
+        throw new Error(`helm template failed with exit code ${exitCode}: ${stderr}`);
+    }
+    return stdout.trim();
 }
 
 /**
@@ -217,6 +257,8 @@ async function run() {
         const gitopsToken = core.getInput('gitops-token', { required: true });
         const gitopsBranch = core.getInput('gitops-branch', { required: false }) || 'main';
         const environment = core.getInput('environment', { required: true });
+        const argoCDAppHelmChart = core.getInput('argocd-app-helm-chart', { required: false }) ||
+            '../templates/helm/argocd-app';
         const applicationName = core.getInput('application-name') || github.context.repo.repo;
         const applicationManifestsPath = core.getInput('application-manifests-path', { required: true });
         // Parse repository information
@@ -243,7 +285,7 @@ async function run() {
         const customValues = core.getInput('custom-values', { required: false }) || '';
         const valuesYaml = await generateValuesYaml(applicationName, environment, gitopsRepoName, gitopsOrg, gitopsBranch, customValues);
         // Generate the manifest file
-        const argocdAppManifest = await generateArgoCDAppManifest(applicationName, environment, valuesYaml);
+        const argocdAppManifest = await generateArgoCDAppManifest(applicationName, environment, valuesYaml, argoCDAppHelmChart);
         // 1c. Save argocd app manifest to a file
         const appDir = path.join(gitOpsRepoLocalPath, 'argocd-apps', applicationName);
         await io.mkdirP(appDir);

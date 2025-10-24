@@ -36,28 +36,49 @@ async function generateValuesYaml(applicationName, environment, sourceRepo, sour
         throw new Error(`Invalid custom values YAML: ${error}`);
     }
 }
-async function generateArgoCDAppManifest(applicationName, environment, customValuesYaml) {
+async function generateArgoCDAppManifest(applicationName, environment, customValuesYaml, argoCDAppHelmChart) {
     // download helm tool using tc cache
     await fetchTcTool('helm');
     // store custom values yaml in a temporary file
     const customValuesFilePath = path.join(os.tmpdir(), 'custom-values.yaml');
     await fs.promises.writeFile(customValuesFilePath, customValuesYaml);
+    // resolve and validate path to the helm chart
+    const baseDir = path.dirname(new URL(import.meta.url).pathname);
+    const resolvedChartPath = path.isAbsolute(argoCDAppHelmChart)
+        ? argoCDAppHelmChart
+        : path.resolve(baseDir, argoCDAppHelmChart);
+    const chartYamlPath = path.join(resolvedChartPath, 'Chart.yaml');
+    try {
+        await fs.promises.readFile(chartYamlPath);
+    }
+    catch {
+        throw new Error(`we cant find helm chart in path given: ${chartYamlPath}`);
+    }
+    // capture stdout from helm template command
+    let stdout = '';
+    let stderr = '';
+    const options = {
+        listeners: {
+            stdout: (data) => {
+                stdout += data.toString();
+            },
+            stderr: (data) => {
+                stderr += data.toString();
+            }
+        }
+    };
     // render the manifest using helm template
-    await exec.exec('helm', [
+    const exitCode = await exec.exec('helm', [
         'template',
-        '.',
+        applicationName,
+        resolvedChartPath,
         '-f',
         customValuesFilePath
-    ]);
-    return `
-  apiVersion: argoproj.io/v1alpha1
-  kind: Application
-  metadata:
-    name: ${applicationName}
-    namespace: argocd
-  spec:
-    project: default
-  `;
+    ], options);
+    if (exitCode !== 0) {
+        throw new Error(`helm template failed with exit code ${exitCode}: ${stderr}`);
+    }
+    return stdout.trim();
 }
 
 export { generateArgoCDAppManifest, generateValuesYaml };

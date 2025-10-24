@@ -49,8 +49,9 @@ export async function generateValuesYaml(
 export async function generateArgoCDAppManifest(
   applicationName: string,
   environment: string,
-  customValuesYaml: string
-) {
+  customValuesYaml: string,
+  argoCDAppHelmChart: string
+): Promise<string> {
   // download helm tool using tc cache
   await fetchTcTool('helm')
 
@@ -58,21 +59,51 @@ export async function generateArgoCDAppManifest(
   const customValuesFilePath = path.join(os.tmpdir(), 'custom-values.yaml')
   await fs.promises.writeFile(customValuesFilePath, customValuesYaml)
 
-  // render the manifest using helm template
-  const manifest = await exec.exec('helm', [
-    'template',
-    '.',
-    '-f',
-    customValuesFilePath
-  ])
+  // resolve and validate path to the helm chart
+  const baseDir = path.dirname(new URL(import.meta.url).pathname)
+  const resolvedChartPath = path.isAbsolute(argoCDAppHelmChart)
+    ? argoCDAppHelmChart
+    : path.resolve(baseDir, argoCDAppHelmChart)
 
-  return `
-  apiVersion: argoproj.io/v1alpha1
-  kind: Application
-  metadata:
-    name: ${applicationName}
-    namespace: argocd
-  spec:
-    project: default
-  `
+  const chartYamlPath = path.join(resolvedChartPath, 'Chart.yaml')
+  try {
+    await fs.promises.readFile(chartYamlPath)
+  } catch {
+    throw new Error(`we cant find helm chart in path given: ${chartYamlPath}`)
+  }
+
+  // capture stdout from helm template command
+  let stdout = ''
+  let stderr = ''
+  const options = {
+    listeners: {
+      stdout: (data: Buffer) => {
+        stdout += data.toString()
+      },
+      stderr: (data: Buffer) => {
+        stderr += data.toString()
+      }
+    }
+  }
+
+  // render the manifest using helm template
+  const exitCode = await exec.exec(
+    'helm',
+    [
+      'template',
+      applicationName,
+      resolvedChartPath,
+      '-f',
+      customValuesFilePath
+    ],
+    options
+  )
+
+  if (exitCode !== 0) {
+    throw new Error(
+      `helm template failed with exit code ${exitCode}: ${stderr}`
+    )
+  }
+
+  return stdout.trim()
 }
