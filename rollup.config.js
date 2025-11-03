@@ -22,12 +22,12 @@ const config = {
     {
       esModule: true,
       file: 'dist/index.js',
-      format: 'es',
+      format: 'cjs', // CommonJS output for backward compatibility
       sourcemap: true
     },
     {
       dir: 'dist',
-      format: 'es',
+      format: 'esm', // ES Modules output for modern usage
       sourcemap: true,
       preserveModules: true,
       preserveModulesRoot: 'src',

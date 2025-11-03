@@ -1,7 +1,7 @@
 import * as yaml from 'js-yaml'
 
 const { generateValuesYaml } = await import(
-  '../dist/utils/argocd-app-manifest.js'
+  '../src/utils/argocd-app-manifest.js'
 )
 
 describe('generateValuesYaml', () => {
@@ -12,7 +12,9 @@ describe('generateValuesYaml', () => {
       'repo',
       'org',
       'main',
-      ''
+      '', // gitopsPath
+      '', // customValues
+      '' // applicationManifestsPath
     )
     const parsed = yaml.load(out)
     expect(parsed.applicationName).toBe('my-app-dev')
@@ -32,7 +34,9 @@ describe('generateValuesYaml', () => {
       'repo2',
       'org2',
       'main',
-      custom
+      '', // gitopsPath
+      custom, // customValues
+      '' // applicationManifestsPath
     )
     const parsed = yaml.load(out)
     expect(parsed.application.destination.namespace).toBe('custom-ns')

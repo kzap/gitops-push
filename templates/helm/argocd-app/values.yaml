@@ -1,0 +1,22 @@
+# Application name - required
+applicationName:
+# Application namespace
+applicationNamespace: argocd
+# Application configuration
+application:
+  # Project name
+  project: default
+  # Destination configuration
+  destination:
+    # Destination server
+    server: https://kubernetes.default.svc
+    # Destination namespace
+    namespace:
+  # Source configuration
+  source:
+    # Source repository URL - required
+    repoURL:
+    # Source target revision - required
+    targetRevision:
+    # Source path - required
+    path:

@@ -49,18 +49,15 @@ const mockIo = {
 jest.unstable_mockModule('@actions/io', () => mockIo)
 
 // Import the function to test
-const { commitAndPush } = await import('../dist/utils/git.js')
+const { commitAndPush } = await import('../src/utils/git.js')
 
 describe('commitAndPush', () => {
   const gitOpsRepoPath = '/tmp/gitops-repo'
+  const gitopsPath = '' // Empty string means root of repo
   const applicationName = 'test-app'
   const environment = 'production'
   const branch = 'main'
-  const argocdManifest = `apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: test-app
-  namespace: argocd`
+  const argocdManifestPath = '/tmp/argocd-app-manifest.yaml' // Changed to file path
   const manifestsPath = '/path/to/manifests'
 
   beforeEach(() => {
@@ -68,8 +65,8 @@ metadata:
     // Default mock: git operations succeed, diff indicates changes exist
     mockExec.exec.mockImplementation((cmd, args) => {
       if (args.includes('diff')) {
-        // Reject to indicate changes exist (non-zero exit code)
-        return Promise.reject(new Error('Has changes'))
+        // Return non-zero exit code to indicate changes exist
+        return Promise.resolve(1)
       }
       return Promise.resolve(0)
     })
@@ -84,40 +81,50 @@ metadata:
   it('should create target directory structure', async () => {
     await commitAndPush(
       gitOpsRepoPath,
+      gitopsPath,
+      branch,
       applicationName,
       environment,
-      branch,
-      argocdManifest,
+      argocdManifestPath,
       manifestsPath
     )
 
-    const expectedTargetDir = path.join(
+    // Check that both application-sets and app manifests directories are created
+    const argocdAppTargetDir = path.join(
       gitOpsRepoPath,
-      applicationName,
-      environment
+      'application-sets',
+      applicationName
     )
-    expect(mockIo.mkdirP).toHaveBeenCalledWith(expectedTargetDir)
-  })
-
-  it('should write ArgoCD manifest to target directory', async () => {
-    await commitAndPush(
+    const appManifestsTargetDir = path.join(
       gitOpsRepoPath,
       applicationName,
       environment,
+      manifestsPath
+    )
+    expect(mockIo.mkdirP).toHaveBeenCalledWith(argocdAppTargetDir)
+    expect(mockIo.mkdirP).toHaveBeenCalledWith(appManifestsTargetDir)
+  })
+
+  it('should copy ArgoCD manifest to target directory', async () => {
+    await commitAndPush(
+      gitOpsRepoPath,
+      gitopsPath,
       branch,
-      argocdManifest,
+      applicationName,
+      environment,
+      argocdManifestPath,
       manifestsPath
     )
 
     const expectedManifestPath = path.join(
       gitOpsRepoPath,
+      'application-sets',
       applicationName,
-      environment,
-      'application.yaml'
+      `${environment}.yaml`
     )
-    expect(mockFs.promises.writeFile).toHaveBeenCalledWith(
-      expectedManifestPath,
-      argocdManifest
+    expect(mockIo.cp).toHaveBeenCalledWith(
+      argocdManifestPath,
+      expectedManifestPath
     )
   })
 
@@ -130,14 +137,15 @@ metadata:
 
     await commitAndPush(
       gitOpsRepoPath,
+      gitopsPath,
+      branch,
       applicationName,
       environment,
-      branch,
-      argocdManifest,
+      argocdManifestPath,
       manifestsPath
     )
 
-    const targetDir = path.join(gitOpsRepoPath, applicationName, environment)
+    const targetDir = path.join(gitOpsRepoPath, applicationName, environment, manifestsPath)
     expect(mockIo.cp).toHaveBeenCalledWith(
       path.join(manifestsPath, 'deployment.yaml'),
       path.join(targetDir, 'deployment.yaml')
@@ -157,14 +165,15 @@ metadata:
 
     await commitAndPush(
       gitOpsRepoPath,
+      gitopsPath,
+      branch,
       applicationName,
       environment,
-      branch,
-      argocdManifest,
+      argocdManifestPath,
       manifestsPath
     )
 
-    const targetDir = path.join(gitOpsRepoPath, applicationName, environment)
+    const targetDir = path.join(gitOpsRepoPath, applicationName, environment, manifestsPath)
     expect(mockIo.cp).toHaveBeenCalledWith(
       path.join(manifestsPath, 'charts'),
       path.join(targetDir, 'charts'),
@@ -177,10 +186,11 @@ metadata:
 
     await commitAndPush(
       gitOpsRepoPath,
+      gitopsPath,
+      branch,
       applicationName,
       environment,
-      branch,
-      argocdManifest,
+      argocdManifestPath,
       manifestsPath
     )
 
@@ -192,10 +202,11 @@ metadata:
   it('should create commit with deployment message', async () => {
     await commitAndPush(
       gitOpsRepoPath,
+      gitopsPath,
+      branch,
       applicationName,
       environment,
-      branch,
-      argocdManifest,
+      argocdManifestPath,
       manifestsPath
     )
 
@@ -213,10 +224,11 @@ metadata:
   it('should push changes with -u flag', async () => {
     await commitAndPush(
       gitOpsRepoPath,
+      gitopsPath,
+      branch,
       applicationName,
       environment,
-      branch,
-      argocdManifest,
+      argocdManifestPath,
       manifestsPath
     )
 
@@ -238,10 +250,11 @@ metadata:
 
     await commitAndPush(
       gitOpsRepoPath,
+      gitopsPath,
+      branch,
       applicationName,
       environment,
-      branch,
-      argocdManifest,
+      argocdManifestPath,
       manifestsPath
     )
 
@@ -266,17 +279,18 @@ metadata:
         return Promise.resolve(0)
       }
       if (args.includes('diff')) {
-        return Promise.reject(new Error('Has changes'))
+        return Promise.resolve(1) // Has changes
       }
       return Promise.resolve(0)
     })
 
     const pushPromise = commitAndPush(
       gitOpsRepoPath,
+      gitopsPath,
+      branch,
       applicationName,
       environment,
-      branch,
-      argocdManifest,
+      argocdManifestPath,
       manifestsPath
     )
 
@@ -302,7 +316,7 @@ metadata:
         return Promise.reject(new Error('Network error'))
       }
       if (args.includes('diff')) {
-        return Promise.reject(new Error('Has changes'))
+        return Promise.resolve(1) // Has changes
       }
       return Promise.resolve(0)
     })
@@ -310,10 +324,11 @@ metadata:
     let error
     const pushPromise = commitAndPush(
       gitOpsRepoPath,
+      gitopsPath,
+      branch,
       applicationName,
       environment,
-      branch,
-      argocdManifest,
+      argocdManifestPath,
       manifestsPath
     ).catch((e) => {
       error = e
@@ -333,14 +348,18 @@ metadata:
   it('should handle git add operation', async () => {
     await commitAndPush(
       gitOpsRepoPath,
+      gitopsPath,
+      branch,
       applicationName,
       environment,
-      branch,
-      argocdManifest,
+      argocdManifestPath,
       manifestsPath
     )
 
-    expect(mockExec.exec).toHaveBeenCalledWith('git', ['add', '.'], {
+    expect(mockExec.exec).toHaveBeenCalledWith('git', ['add', './application-sets'], {
+      cwd: gitOpsRepoPath
+    })
+    expect(mockExec.exec).toHaveBeenCalledWith('git', ['add', './' + applicationName], {
       cwd: gitOpsRepoPath
     })
   })
@@ -348,10 +367,11 @@ metadata:
   it('should use HEAD as default branch if not specified', async () => {
     await commitAndPush(
       gitOpsRepoPath,
+      gitopsPath,
+      '', // empty branch
       applicationName,
       environment,
-      '', // empty branch
-      argocdManifest,
+      argocdManifestPath,
       manifestsPath
     )
 
@@ -362,16 +382,17 @@ metadata:
     )
   })
 
-  it('should throw error on write failure', async () => {
-    mockFs.promises.writeFile.mockRejectedValue(new Error('Permission denied'))
+  it('should throw error on copy failure', async () => {
+    mockIo.cp.mockRejectedValue(new Error('Permission denied'))
 
     await expect(
       commitAndPush(
         gitOpsRepoPath,
+        gitopsPath,
+        branch,
         applicationName,
         environment,
-        branch,
-        argocdManifest,
+        argocdManifestPath,
         manifestsPath
       )
     ).rejects.toThrow('Failed to commit and push')
@@ -383,10 +404,11 @@ metadata:
     await expect(
       commitAndPush(
         gitOpsRepoPath,
+        gitopsPath,
+        branch,
         applicationName,
         environment,
-        branch,
-        argocdManifest,
+        argocdManifestPath,
         manifestsPath
       )
     ).rejects.toThrow('Failed to commit and push')

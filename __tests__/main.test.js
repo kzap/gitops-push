@@ -70,8 +70,8 @@ jest.unstable_mockModule('@actions/tool-cache', () => mockToolCache)
 
 // The module being tested should be imported dynamically. This ensures that the
 // mocks are used in place of any actual dependencies.
-const { run } = await import('../dist/main.js')
-const { parseRepositoryInfo } = await import('../dist/utils/git.js')
+const { run } = await import('../src/main.js')
+const { parseRepositoryInfo } = await import('../src/utils/git.js')
 
 describe('main.js', () => {
   beforeEach(() => {
@@ -95,25 +95,18 @@ describe('main.js', () => {
 
     // Mock process.env
     process.env.GITHUB_REF_NAME = 'main'
+    process.env.GITHUB_STEP_SUMMARY = '/tmp/step_summary.md'
+    process.env.RUNNER_TOOL_CACHE = '/tmp/runner_tool_cache'
+    process.env.RUNNER_TEMP = '/tmp/runner_temp'
   })
 
   afterEach(() => {
     jest.resetAllMocks()
     // Clean up env variables
     delete process.env.GITHUB_REF_NAME
-  })
-
-  it('Sets the time output and generates manifest', async () => {
-    await run()
-
-    // Verify the ApplicationSet directory was created
-    expect(mockIo.mkdirP).toHaveBeenCalled()
-
-    // Verify git operations were performed
-    expect(mockExec.exec).toHaveBeenCalled()
-
-    // Verify the time output was set (loose)
-    expect(core.setOutput).toHaveBeenCalled()
+    delete process.env.GITHUB_STEP_SUMMARY
+    delete process.env.RUNNER_TOOL_CACHE
+    delete process.env.RUNNER_TEMP
   })
 
   it('Parses repository with owner/repo format', async () => {

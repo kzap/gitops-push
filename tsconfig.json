@@ -1,18 +1,15 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "allowJs": false,
-    "checkJs": false,
+    "target": "es6",
+    "module": "commonjs",
+    "lib": ["es6"],
+    "outDir": "./lib",
+    "rootDir": "./src",
+    "declaration": true,
     "strict": true,
-    "skipLibCheck": true,
+    "noImplicitAny": false,
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "noFallthroughCasesInSwitch": true,
-    "noEmit": true
+    "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts"]
+  "exclude": ["__test__", "lib", "node_modules"]
 }
