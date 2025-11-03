@@ -3,7 +3,7 @@ import * as path from 'path'
 import * as fs from 'fs'
 
 const { generateArgoCDAppManifest } = await import(
-  '../dist/utils/argocd-app-manifest.js'
+  '../src/utils/argocd-app-manifest.js'
 )
 
 describe('generateArgoCDAppManifest (real helm)', () => {
@@ -26,10 +26,15 @@ describe('generateArgoCDAppManifest (real helm)', () => {
     await fs.promises.mkdir(runnerTempDir, { recursive: true })
     process.env.RUNNER_TOOL_CACHE = toolCacheDir
     process.env.RUNNER_TEMP = runnerTempDir
+
+    // Mock GITHUB_STEP_SUMMARY for core.summary
+    const stepSummaryPath = path.join(runnerTempDir, 'step_summary.md')
+    await fs.promises.writeFile(stepSummaryPath, '', 'utf-8')
+    process.env.GITHUB_STEP_SUMMARY = stepSummaryPath
   })
 
   it('generates ArgoCD Application manifest from helm template', async () => {
-    const customValues = `applicationName: my-app-dev
+    const customValuesYaml = `applicationName: my-app-dev
 applicationNamespace: argocd
 application:
   project: default
@@ -41,15 +46,17 @@ application:
     targetRevision: main
     path: my-app/dev/`
 
-    const result = await generateArgoCDAppManifest(
-      'my-app',
-      'dev',
-      customValues,
+    const resultFilePath = await generateArgoCDAppManifest(
+      customValuesYaml,
       fixtureChart
     )
 
-    // Verify the result is valid YAML
-    expect(result).toBeTruthy()
+    // Verify the result is a valid file path
+    expect(resultFilePath).toBeTruthy()
+    expect(fs.existsSync(resultFilePath)).toBe(true)
+
+    // Read the file content
+    const result = await fs.promises.readFile(resultFilePath, 'utf-8')
     expect(() => yaml.loadAll(result)).not.toThrow()
 
     // Parse and verify the generated manifest
@@ -67,5 +74,5 @@ application:
     expect(app.spec.destination.namespace).toBe('my-app')
     expect(app.spec.syncPolicy.automated.prune).toBe(true)
     expect(app.spec.syncPolicy.automated.selfHeal).toBe(true)
-  })
+  }, 60000)
 })

@@ -2,6 +2,7 @@
 
 /** @type {import('jest').Config} */
 const jestConfig = {
+  preset: 'ts-jest/presets/default-esm',
   clearMocks: true,
   collectCoverage: true,
   collectCoverageFrom: ['./src/**'],
@@ -19,11 +20,27 @@ const jestConfig = {
   //     statements: 100
   //   }
   // },
-  moduleFileExtensions: ['js'],
+  extensionsToTreatAsEsm: ['.ts'],
+  moduleFileExtensions: ['js', 'ts'],
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1'
+  },
   reporters: ['default'],
   testEnvironment: 'node',
   testMatch: ['**/*.test.js'],
   testPathIgnorePatterns: ['/dist/', '/node_modules/'],
+  transform: {
+    '^.+\\.ts$': [
+      'ts-jest',
+      {
+        useESM: true,
+        tsconfig: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler'
+        }
+      }
+    ]
+  },
   verbose: true
 }
 

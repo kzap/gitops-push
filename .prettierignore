@@ -6,3 +6,4 @@ coverage/
 *.hbs
 __fixtures__/
 src/templates/helm/
+/templates/helm/

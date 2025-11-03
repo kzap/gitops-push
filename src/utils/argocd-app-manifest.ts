@@ -1,4 +1,5 @@
 import * as exec from '@actions/exec'
+import * as core from '@actions/core'
 import { fetchTcTool } from './tools'
 import * as path from 'path'
 import * as fs from 'fs'
@@ -6,13 +7,38 @@ import * as os from 'os'
 import * as yaml from 'js-yaml'
 import _ from 'lodash'
 
+// Generate the Values YAML file for the ArgoCD ApplicationSet Manifest using the templating tool (helm)
+//
+// @param {string} applicationName - The name of the application
+// @param {string} environment - The environment of the application
+// @param {string} sourceRepo - The name of the source repository
+// @param {string} sourceOrg - The organization of the source repository
+// @param {string} sourceBranch - The branch of the source repository
+// @param {string} gitopsPath - The path in the gitops repository where all the files will be pushed
+// @param {string} customValues - The custom values yaml for the application
+// @param {string} applicationManifestsPath - The path to the application manifests directory
+// @returns {Promise<string>} The path to the generated Values YAML file
+//
+// @example
+// generateValuesYaml(
+//   applicationName: 'my-application',
+//   environment: 'production',
+//   sourceRepo: 'my-repo',
+//   sourceOrg: 'my-org',
+//   sourceBranch: 'main',
+//   gitopsPath: './',
+//   customValues: 'custom-values.yaml',
+//   applicationManifestsPath: './'
+// )
 export async function generateValuesYaml(
   applicationName: string,
   environment: string,
   sourceRepo: string,
   sourceOrg: string,
   sourceBranch: string,
-  customValues: string
+  gitopsPath: string,
+  customValues: string,
+  applicationManifestsPath: string
 ): Promise<string> {
   // define defaultValues YAML object as a JSON object
   const defaultValues: Record<string, any> = {
@@ -24,7 +50,7 @@ export async function generateValuesYaml(
       source: {
         repoURL: `https://github.com/${sourceOrg}/${sourceRepo}.git`,
         targetRevision: sourceBranch,
-        path: `${applicationName}/${environment}/`
+        path: `${path.join(gitopsPath, applicationName, environment, applicationManifestsPath, '/')}`
       }
     }
   }
@@ -46,24 +72,39 @@ export async function generateValuesYaml(
   }
 }
 
+// Generate the ArgoCD ApplicationSet Manifest file using the templating tool (helm)
+//
+// @param {string} customValuesYaml - The custom values yaml for the application
+// @param {string} argoCDAppHelmChart - The path to the ArgoCD app helm chart
+// @returns {Promise<string>} The path to the generated ArgoCD ApplicationSet Manifest
+//
+// @example
+// generateArgoCDAppManifest(
+//   applicationName: 'my-application',
+//   environment: 'production',
+//   customValuesYaml: 'custom-values.yaml',
+//   argoCDAppHelmChart: '../templates/helm/argocd-app'
+// )
 export async function generateArgoCDAppManifest(
-  applicationName: string,
-  environment: string,
   customValuesYaml: string,
   argoCDAppHelmChart: string
 ): Promise<string> {
   // download helm tool using tc cache
   await fetchTcTool('helm')
 
-  // store custom values yaml in a temporary file
-  const customValuesFilePath = path.join(os.tmpdir(), 'custom-values.yaml')
+  // store custom values yaml in a temporary random file name
+  const randomCustomValuesFileName = `gitops-push-custom-values-${Date.now()}-${Math.random().toString(36).substring(2, 15)}.yaml`
+  const customValuesFilePath = path.join(
+    os.tmpdir(),
+    randomCustomValuesFileName
+  )
   await fs.promises.writeFile(customValuesFilePath, customValuesYaml)
 
   // resolve and validate path to the helm chart
-  const baseDir = path.dirname(new URL(import.meta.url).pathname)
+  // If relative path is provided, resolve it from current working directory
   const resolvedChartPath = path.isAbsolute(argoCDAppHelmChart)
     ? argoCDAppHelmChart
-    : path.resolve(baseDir, argoCDAppHelmChart)
+    : path.resolve(process.cwd(), argoCDAppHelmChart)
 
   const chartYamlPath = path.join(resolvedChartPath, 'Chart.yaml')
   try {
@@ -89,13 +130,7 @@ export async function generateArgoCDAppManifest(
   // render the manifest using helm template
   const exitCode = await exec.exec(
     'helm',
-    [
-      'template',
-      applicationName,
-      resolvedChartPath,
-      '-f',
-      customValuesFilePath
-    ],
+    ['template', 'argocd-app', resolvedChartPath, '-f', customValuesFilePath],
     options
   )
 
@@ -105,5 +140,23 @@ export async function generateArgoCDAppManifest(
     )
   }
 
-  return stdout.trim()
+  // remove custom values file
+  await fs.promises.unlink(customValuesFilePath)
+
+  // save output to a temporary file
+  const randomOutputFileName = `gitops-push-output-manifest-${Date.now()}-${Math.random().toString(36).substring(2, 15)}.yaml`
+  const outputFilePath = path.join(os.tmpdir(), randomOutputFileName)
+  await fs.promises.writeFile(outputFilePath, stdout.trim())
+
+  core.info(
+    `✅ Successfully generated ArgoCD ApplicationSet Manifest at ${outputFilePath}`
+  )
+
+  // save to github summary
+  await core.summary
+    .addHeading(`ArgoCD ApplicationSet Manifest:`)
+    .addCodeBlock(stdout.trim(), 'yaml')
+    .write()
+
+  return outputFilePath
 }
