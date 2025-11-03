@@ -54,18 +54,18 @@ jobs:
         with:
           repository: ${{ env.GITOPS_REPOSITORY }}
           ref: ${{ env.GITOPS_BRANCH }}
-          path: e2e-test-gitops-repo
+          path: gitops-repo-temp-dir
 
       - name: Verify Generated YAML Structure
         id: verify-yaml
         run: |
-          tree -L 2 -a ./ -I 'node_modules'
+          cd ./gitops-repo-temp-dir/e2e-test-gitops-repo
 
-          cd ./e2e-test-gitops-repo
+          tree -L 2 -a ./ -I 'node_modules'
 
           # Find and verify the ApplicationSet YAML file
           # Look specifically for ApplicationSet files in the applicationsets directory
-          YAML_FILE=$(find ./applicationsets -name "*.yaml" -o -name "*.yml" | head -1)
+          YAML_FILE=$(find ./application-sets -name "*.yaml" -o -name "*.yml" | head -1)
           if [ -z "$YAML_FILE" ]; then
             echo "❌ No ApplicationSet YAML file found in applicationsets directory"
             echo "📁 Directory structure:"
