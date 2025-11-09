@@ -1,9 +1,7 @@
-name: E2E Test
+# This workflow is to test the action as if run by a remote repository.
+name: E2E Test Remote
 
 on: push
-
-permissions:
-  contents: read
 
 env:
   GITOPS_REPOSITORY: kzap/gitops-push
@@ -18,27 +16,12 @@ jobs:
     strategy:
       matrix:
         environment:
-          - test-action
+          - test-env
     environment: ${{ matrix.environment }}
     steps:
-      - name: Checkout
-        id: checkout
-        uses: actions/checkout@v5
-
-      - name: Setup Node.js
-        id: setup-node
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: .node-version
-          cache: npm
-
-      - name: Install Dependencies
-        id: npm-ci
-        run: npm ci
-
-      - name: Test Local Action
+      - name: Test Remote Action
         id: test-action
-        uses: ./
+        uses: kzap/gitops-push@main
         with:
           gitops-token: ${{ github.token }}
           gitops-repository: kzap/gitops-push
