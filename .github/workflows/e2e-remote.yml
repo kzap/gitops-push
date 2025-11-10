@@ -21,7 +21,9 @@ jobs:
     steps:
       - name: Test Remote Action
         id: test-action
-        uses: kzap/gitops-push@main
+        # Testing
+        #uses: kzap/gitops-push@main
+        uses: kzap/gitops-push@amt/test-remote-action
         with:
           gitops-token: ${{ github.token }}
           gitops-repository: kzap/gitops-push
