@@ -1,0 +1,22 @@
+---
+# Source: argocd-app/templates/application.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gitops-push-test-action
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/kzap/gitops-push.git
+    targetRevision: gitops-ci-19237579267-1
+    path: gitops-push/test-action/
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gitops-push
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
