@@ -104,18 +104,6 @@ export async function setupTool(tool: SupportedTool): Promise<boolean> {
     }
     core.info('Helm git plugin installed')
 
-    // show output of helm plugin list
-    let {
-      exitCode: helmPluginListExitCode,
-      stdout: helmPluginListStdout,
-      stderr: helmPluginListStderr
-    } = await execWithOutput('helm', ['plugin', 'list'])
-    if (helmPluginListExitCode !== 0) {
-      throw new Error(
-        `helm plugin list failed with exit code ${helmPluginListExitCode}: ${helmPluginListStderr}`
-      )
-    }
-    core.info(`Helm plugins list: ${helmPluginListStdout}`)
     return true
   }
   return false
