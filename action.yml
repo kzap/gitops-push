@@ -44,8 +44,9 @@ inputs:
     required: false
   argocd-app-helm-chart:
     description:
-      Path to the Helm chart which is used to render our ArgoCD Application
-      (default './templates/helm/argocd-app')
+      Helm chart URL which is used to render our ArgoCD Application. Supports
+      helm-git plugin. (default
+      'git+https://github.com/kzap/gitops-push@templates/helm/argocd-app-0.1.0.tgz?ref=main')
     required: false
   custom-values:
     description:

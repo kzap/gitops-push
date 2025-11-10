@@ -46,9 +46,9 @@ export async function run() {
       core.getInput('application-manifests-path', { required: false }) || './'
     const customValues =
       core.getInput('custom-values', { required: false }) || ''
-    const argoCDAppHelmChart =
-      core.getInput('argocd-app-helm-chart', { required: false }) || './templates/helm/argocd-app'
-      
+    const argoCDAppHelmChartGitURL =
+      core.getInput('argocd-app-helm-chart', { required: false }) ||
+      'git+https://github.com/kzap/gitops-push@templates/helm/argocd-app-0.1.0.tgz?ref=main'
 
     // Parse repository information
     const { gitopsOrg, gitopsRepoName } = parseRepositoryInfo(gitopsRepository)
@@ -66,7 +66,7 @@ export async function run() {
     core.info(`🔍 Environment: ${environment}`)
     core.info(`🔍 Application Name: ${applicationName}`)
     core.info(`🔍 Application Manifests Path: ${applicationManifestsPath}`)
-    core.info(`🔍 ArgoCD App Helm Chart: ${argoCDAppHelmChart}`)
+    core.info(`🔍 ArgoCD App Helm Chart: ${argoCDAppHelmChartGitURL}`)
     core.info(`🔍 Custom Values: ${customValues}`)
 
     core.notice(
@@ -106,7 +106,7 @@ export async function run() {
     // Generate the manifest file to a temporary file
     const argocdAppManifest = await generateArgoCDAppManifest(
       valuesYaml,
-      argoCDAppHelmChart
+      argoCDAppHelmChartGitURL
     )
 
     // 2. Copy files to the GitOps repository and commit/push

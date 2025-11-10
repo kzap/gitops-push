@@ -1,6 +1,6 @@
 import * as exec from '@actions/exec'
 import * as core from '@actions/core'
-import { fetchTcTool } from './tools'
+import { fetchTcTool, setupTool, execWithOutput } from './tools'
 import * as path from 'path'
 import * as fs from 'fs'
 import * as os from 'os'
@@ -80,17 +80,16 @@ export async function generateValuesYaml(
 //
 // @example
 // generateArgoCDAppManifest(
-//   applicationName: 'my-application',
-//   environment: 'production',
 //   customValuesYaml: 'custom-values.yaml',
-//   argoCDAppHelmChart: '../templates/helm/argocd-app'
+//   argoCDAppHelmChartGitURL: 'git+https://github.com/kzap/gitops-push@templates/helm/argocd-app-0.1.0.tgz?ref=main'
 // )
 export async function generateArgoCDAppManifest(
   customValuesYaml: string,
-  argoCDAppHelmChart: string
+  argoCDAppHelmChartGitURL: string
 ): Promise<string> {
   // download helm tool using tc cache
   await fetchTcTool('helm')
+  await setupTool('helm')
 
   // store custom values yaml in a temporary random file name
   const randomCustomValuesFileName = `gitops-push-custom-values-${Date.now()}-${Math.random().toString(36).substring(2, 15)}.yaml`
@@ -100,43 +99,33 @@ export async function generateArgoCDAppManifest(
   )
   await fs.promises.writeFile(customValuesFilePath, customValuesYaml)
 
-  // resolve and validate path to the helm chart
-  // If relative path is provided, resolve it from current working directory
-  const resolvedChartPath = path.isAbsolute(argoCDAppHelmChart)
-    ? argoCDAppHelmChart
-    : path.resolve(process.cwd(), argoCDAppHelmChart)
-
-  const chartYamlPath = path.join(resolvedChartPath, 'Chart.yaml')
-  try {
-    await fs.promises.readFile(chartYamlPath)
-  } catch {
-    throw new Error(`we cant find helm chart in path given: ${chartYamlPath}`)
-  }
-
-  // capture stdout from helm template command
-  let stdout = ''
-  let stderr = ''
-  const options = {
-    listeners: {
-      stdout: (data: Buffer) => {
-        stdout += data.toString()
-      },
-      stderr: (data: Buffer) => {
-        stderr += data.toString()
-      }
-    }
+  // test if argoCDAppHelmChart is a valid by running helm fetch on it
+  let {
+    exitCode: helmFetchExitCode,
+    stdout: helmFetchStdout,
+    stderr: helmFetchStderr
+  } = await execWithOutput('helm', ['fetch', argoCDAppHelmChartGitURL])
+  if (helmFetchExitCode !== 0) {
+    throw new Error(
+      `helm fetch failed with exit code ${helmFetchExitCode}: ${helmFetchStderr}`
+    )
   }
 
   // render the manifest using helm template
-  const exitCode = await exec.exec(
-    'helm',
-    ['template', 'argocd-app', resolvedChartPath, '-f', customValuesFilePath],
-    options
-  )
-
-  if (exitCode !== 0) {
+  let {
+    exitCode: helmTemplateExitCode,
+    stdout: helmTemplateStdout,
+    stderr: helmTemplateStderr
+  } = await execWithOutput('helm', [
+    'template',
+    'argocd-app',
+    argoCDAppHelmChartGitURL,
+    '-f',
+    customValuesFilePath
+  ])
+  if (helmTemplateExitCode !== 0) {
     throw new Error(
-      `helm template failed with exit code ${exitCode}: ${stderr}`
+      `helm template failed with exit code ${helmTemplateExitCode}: ${helmTemplateStderr}`
     )
   }
 
@@ -146,7 +135,7 @@ export async function generateArgoCDAppManifest(
   // save output to a temporary file
   const randomOutputFileName = `gitops-push-output-manifest-${Date.now()}-${Math.random().toString(36).substring(2, 15)}.yaml`
   const outputFilePath = path.join(os.tmpdir(), randomOutputFileName)
-  await fs.promises.writeFile(outputFilePath, stdout.trim())
+  await fs.promises.writeFile(outputFilePath, helmTemplateStdout)
 
   core.info(
     `✅ Successfully generated ArgoCD ApplicationSet Manifest at ${outputFilePath}`
@@ -155,7 +144,7 @@ export async function generateArgoCDAppManifest(
   // save to github summary
   await core.summary
     .addHeading(`ArgoCD ApplicationSet Manifest:`)
-    .addCodeBlock(stdout.trim(), 'yaml')
+    .addCodeBlock(helmTemplateStdout, 'yaml')
     .write()
 
   return outputFilePath

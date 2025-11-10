@@ -53752,7 +53752,8 @@ function run() {
             const applicationName = core.getInput('application-name') || github.context.repo.repo;
             const applicationManifestsPath = core.getInput('application-manifests-path', { required: false }) || './';
             const customValues = core.getInput('custom-values', { required: false }) || '';
-            const argoCDAppHelmChart = core.getInput('argocd-app-helm-chart', { required: false }) || './templates/helm/argocd-app';
+            const argoCDAppHelmChartGitURL = core.getInput('argocd-app-helm-chart', { required: false }) ||
+                'git+https://github.com/kzap/gitops-push@templates/helm/argocd-app-0.1.0.tgz?ref=main';
             // Parse repository information
             const { gitopsOrg, gitopsRepoName } = (0, git_1.parseRepositoryInfo)(gitopsRepository);
             core.info(`✅ Repository parsed as: ${gitopsOrg}/${gitopsRepoName}`);
@@ -53767,7 +53768,7 @@ function run() {
             core.info(`🔍 Environment: ${environment}`);
             core.info(`🔍 Application Name: ${applicationName}`);
             core.info(`🔍 Application Manifests Path: ${applicationManifestsPath}`);
-            core.info(`🔍 ArgoCD App Helm Chart: ${argoCDAppHelmChart}`);
+            core.info(`🔍 ArgoCD App Helm Chart: ${argoCDAppHelmChartGitURL}`);
             core.info(`🔍 Custom Values: ${customValues}`);
             core.notice(`We are going to push [Env: ${environment}] ArgoCD ApplicationSet for [App: ${applicationName}] to [Repo: ${gitopsOrg}/${gitopsRepoName}] on the branch [Branch: ${gitopsBranch || '[Using default branch]'}].`);
             // 0. Clone GitOps Repository
@@ -53781,7 +53782,7 @@ function run() {
             // Prepare template data for the ApplicationSet manifest
             const valuesYaml = yield (0, argocd_app_manifest_1.generateValuesYaml)(applicationName, environment, gitopsRepoName, gitopsOrg, gitopsBranch, gitopsPath, customValues, applicationManifestsPath);
             // Generate the manifest file to a temporary file
-            const argocdAppManifest = yield (0, argocd_app_manifest_1.generateArgoCDAppManifest)(valuesYaml, argoCDAppHelmChart);
+            const argocdAppManifest = yield (0, argocd_app_manifest_1.generateArgoCDAppManifest)(valuesYaml, argoCDAppHelmChartGitURL);
             // 2. Copy files to the GitOps repository and commit/push
             // Commit and push changes - this will organize files into applicationName/environment/
             yield (0, git_1.commitAndPush)(gitopsRepoLocalPath, gitopsPath, gitopsBranch, applicationName, environment, argocdAppManifest, applicationManifestsPath);
@@ -53862,7 +53863,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.generateValuesYaml = generateValuesYaml;
 exports.generateArgoCDAppManifest = generateArgoCDAppManifest;
-const exec = __importStar(__nccwpck_require__(5236));
 const core = __importStar(__nccwpck_require__(7484));
 const tools_1 = __nccwpck_require__(8370);
 const path = __importStar(__nccwpck_require__(6928));
@@ -53933,60 +53933,45 @@ function generateValuesYaml(applicationName, environment, sourceRepo, sourceOrg,
 //
 // @example
 // generateArgoCDAppManifest(
-//   applicationName: 'my-application',
-//   environment: 'production',
 //   customValuesYaml: 'custom-values.yaml',
-//   argoCDAppHelmChart: '../templates/helm/argocd-app'
+//   argoCDAppHelmChartGitURL: 'git+https://github.com/kzap/gitops-push@templates/helm/argocd-app-0.1.0.tgz?ref=main'
 // )
-function generateArgoCDAppManifest(customValuesYaml, argoCDAppHelmChart) {
+function generateArgoCDAppManifest(customValuesYaml, argoCDAppHelmChartGitURL) {
     return __awaiter(this, void 0, void 0, function* () {
         // download helm tool using tc cache
         yield (0, tools_1.fetchTcTool)('helm');
+        yield (0, tools_1.setupTool)('helm');
         // store custom values yaml in a temporary random file name
         const randomCustomValuesFileName = `gitops-push-custom-values-${Date.now()}-${Math.random().toString(36).substring(2, 15)}.yaml`;
         const customValuesFilePath = path.join(os.tmpdir(), randomCustomValuesFileName);
         yield fs.promises.writeFile(customValuesFilePath, customValuesYaml);
-        // resolve and validate path to the helm chart
-        // If relative path is provided, resolve it from current working directory
-        const resolvedChartPath = path.isAbsolute(argoCDAppHelmChart)
-            ? argoCDAppHelmChart
-            : path.resolve(process.cwd(), argoCDAppHelmChart);
-        const chartYamlPath = path.join(resolvedChartPath, 'Chart.yaml');
-        try {
-            yield fs.promises.readFile(chartYamlPath);
+        // test if argoCDAppHelmChart is a valid by running helm fetch on it
+        let { exitCode: helmFetchExitCode, stdout: helmFetchStdout, stderr: helmFetchStderr } = yield (0, tools_1.execWithOutput)('helm', ['fetch', argoCDAppHelmChartGitURL]);
+        if (helmFetchExitCode !== 0) {
+            throw new Error(`helm fetch failed with exit code ${helmFetchExitCode}: ${helmFetchStderr}`);
         }
-        catch (_a) {
-            throw new Error(`we cant find helm chart in path given: ${chartYamlPath}`);
-        }
-        // capture stdout from helm template command
-        let stdout = '';
-        let stderr = '';
-        const options = {
-            listeners: {
-                stdout: (data) => {
-                    stdout += data.toString();
-                },
-                stderr: (data) => {
-                    stderr += data.toString();
-                }
-            }
-        };
         // render the manifest using helm template
-        const exitCode = yield exec.exec('helm', ['template', 'argocd-app', resolvedChartPath, '-f', customValuesFilePath], options);
-        if (exitCode !== 0) {
-            throw new Error(`helm template failed with exit code ${exitCode}: ${stderr}`);
+        let { exitCode: helmTemplateExitCode, stdout: helmTemplateStdout, stderr: helmTemplateStderr } = yield (0, tools_1.execWithOutput)('helm', [
+            'template',
+            'argocd-app',
+            argoCDAppHelmChartGitURL,
+            '-f',
+            customValuesFilePath
+        ]);
+        if (helmTemplateExitCode !== 0) {
+            throw new Error(`helm template failed with exit code ${helmTemplateExitCode}: ${helmTemplateStderr}`);
         }
         // remove custom values file
         yield fs.promises.unlink(customValuesFilePath);
         // save output to a temporary file
         const randomOutputFileName = `gitops-push-output-manifest-${Date.now()}-${Math.random().toString(36).substring(2, 15)}.yaml`;
         const outputFilePath = path.join(os.tmpdir(), randomOutputFileName);
-        yield fs.promises.writeFile(outputFilePath, stdout.trim());
+        yield fs.promises.writeFile(outputFilePath, helmTemplateStdout);
         core.info(`✅ Successfully generated ArgoCD ApplicationSet Manifest at ${outputFilePath}`);
         // save to github summary
         yield core.summary
             .addHeading(`ArgoCD ApplicationSet Manifest:`)
-            .addCodeBlock(stdout.trim(), 'yaml')
+            .addCodeBlock(helmTemplateStdout, 'yaml')
             .write();
         return outputFilePath;
     });
@@ -54051,6 +54036,7 @@ const github = __importStar(__nccwpck_require__(3228));
 const fs = __importStar(__nccwpck_require__(9896));
 const path = __importStar(__nccwpck_require__(6928));
 const io = __importStar(__nccwpck_require__(4994));
+const tools_1 = __nccwpck_require__(8370);
 /**
  * Parse the repository information from input.
  *
@@ -54142,7 +54128,7 @@ function cloneGitOpsRepo(token, org, repo, branch, directory) {
 function commitAndPush(gitopsRepoLocalPath, gitopsPath, gitopsBranch, applicationName, environment, argocdAppManifestPath, applicationManifestsPath) {
     return __awaiter(this, void 0, void 0, function* () {
         // Prefix of path where we put the ArgoCD App to separate it from the application manifests
-        const gitopsArgoAppsPrefix = 'application-sets';
+        const gitopsArgoAppsPrefix = 'argocd-apps';
         const gitopsBasePath = path.join(gitopsRepoLocalPath, gitopsPath);
         try {
             // Create the target directory structure: `${gitopsBasePath}/${gitopsArgoAppsPrefix}/${applicationName}`
@@ -54181,22 +54167,30 @@ function commitAndPush(gitopsRepoLocalPath, gitopsPath, gitopsBranch, applicatio
                 core.warning(`Application manifests path does not exist: ${applicationManifestsPath}`);
             }
             // Show github status output for the changes
-            const statusOutput = yield exec.exec('git', ['status'], {
+            let { exitCode: gitStatusExitCode, stdout: gitStatusStdout, stderr: gitStatusStderr } = yield (0, tools_1.execWithOutput)('git', ['status'], {
                 cwd: gitopsBasePath
             });
-            core.info(`🤖🤖🤖 Git status output: ${statusOutput}`);
+            core.info(`🤖🤖🤖 Git status output: ${gitStatusStdout}`);
             // Show directory tree structure
-            const treeOutput = yield exec.exec('tree', ['-L', '2', '-a', '-I', 'node_modules'], {
+            let { exitCode: treeExitCode, stdout: treeStdout, stderr: treeStderr } = yield (0, tools_1.execWithOutput)('tree', ['-L', '2', '-a', '-I', 'node_modules'], {
                 cwd: gitopsBasePath
             });
-            core.info(`🤖🤖🤖 Tree output: ${treeOutput}`);
-            // Add changes
-            yield exec.exec('git', ['add', './application-sets'], { cwd: gitopsBasePath });
-            yield exec.exec('git', ['add', './' + applicationName], { cwd: gitopsBasePath });
+            core.info(`🤖🤖🤖 Tree output: ${treeStdout}`);
+            // Add ArgoCD app changes
+            yield exec.exec('git', ['add', './' + gitopsArgoAppsPrefix], {
+                cwd: gitopsBasePath
+            });
+            // Add application manifests changes
+            yield exec.exec('git', ['add', './' + applicationName], {
+                cwd: gitopsBasePath
+            });
             // Check if there are any changes to commit
-            const hasChanges = yield exec.exec('git', ['diff', '--cached', '--quiet'], { cwd: gitopsBasePath, ignoreReturnCode: true });
-            core.info(`🤖🤖🤖 Has changes: ${hasChanges}`);
-            if (hasChanges === 0) {
+            let { exitCode: gitDiffExitCode, stdout: gitDiffStdout, stderr: gitDiffStderr } = yield (0, tools_1.execWithOutput)('git', ['diff', '--cached', '--quiet'], {
+                cwd: gitopsBasePath,
+                ignoreReturnCode: true
+            });
+            core.info(`🤖🤖🤖 Has changes: ${gitDiffExitCode}`);
+            if (gitDiffExitCode === 0) {
                 core.info('No changes to commit');
                 return;
             }
@@ -54291,9 +54285,12 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.fetchTcTool = fetchTcTool;
+exports.setupTool = setupTool;
+exports.execWithOutput = execWithOutput;
 const tc = __importStar(__nccwpck_require__(3472));
 const core = __importStar(__nccwpck_require__(7484));
 const path = __importStar(__nccwpck_require__(6928));
+const exec = __importStar(__nccwpck_require__(5236));
 const toolDownloadUrl = {
     helm: {
         latest: {
@@ -54351,6 +54348,56 @@ function fetchTcTool(tool_1) {
         core.addPath(cachedPath);
         core.info(`Tool ${tool} version ${version} has been cached in ${cachedPath}`);
         return true;
+    });
+}
+function setupTool(tool) {
+    return __awaiter(this, void 0, void 0, function* () {
+        // if tool is helm run, do helm plugin install https://github.com/aslafy-z/helm-git --version 1.4.1
+        if (tool === 'helm') {
+            let { exitCode: helmPluginInstallExitCode, stdout: helmPluginInstallStdout, stderr: helmPluginInstallStderr } = yield execWithOutput('helm', [
+                'plugin',
+                'install',
+                'https://github.com/aslafy-z/helm-git',
+                '--version',
+                '1.4.1'
+            ]);
+            if (helmPluginInstallExitCode !== 0) {
+                // Check if the error is because the plugin already exists (can be in either stdout or stderr)
+                const combinedOutput = helmPluginInstallStdout + helmPluginInstallStderr;
+                if (combinedOutput.includes('plugin already exists')) {
+                    core.info('Helm git plugin already installed');
+                }
+                else {
+                    throw new Error(`helm plugin install failed with exit code ${helmPluginInstallExitCode}: ${helmPluginInstallStderr}`);
+                }
+            }
+            else {
+                core.info('Helm git plugin installed');
+            }
+            return true;
+        }
+        return false;
+    });
+}
+function execWithOutput(command, args, options) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let stdout = '';
+        let stderr = '';
+        const defaultOptions = {
+            ignoreReturnCode: true, // Don't throw on non-zero exit codes
+            listeners: {
+                stdout: (data) => {
+                    stdout += data.toString();
+                },
+                stderr: (data) => {
+                    stderr += data.toString();
+                }
+            }
+        };
+        const finalOptions = Object.assign(Object.assign({}, defaultOptions), options);
+        core.info(`Executing command: ${command} ${args.join(' ')}`);
+        const exitCode = yield exec.exec(command, args, finalOptions);
+        return { exitCode, stdout: stdout.trim(), stderr: stderr.trim() };
     });
 }
 

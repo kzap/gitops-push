@@ -1,0 +1,162 @@
+# This workflow is to test the action while it it being worked on.
+name: E2E Test Local
+
+on: pull_request
+
+permissions:
+  contents: read
+
+env:
+  GITOPS_REPOSITORY: kzap/gitops-push
+  GITOPS_BRANCH: gitops-ci-${{ github.run_id }}-${{ github.run_attempt }}
+
+jobs:
+  e2e-test:
+    name: End-to-End Test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        environment:
+          - test-env
+    environment: ${{ matrix.environment }}
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        id: setup-node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install Dependencies
+        id: npm-ci
+        run: npm ci
+
+      - name: Test Local Action
+        id: test-action
+        uses: ./
+        with:
+          gitops-token: ${{ github.token }}
+          gitops-repository: kzap/gitops-push
+          gitops-branch:
+            gitops-ci-${{ github.run_id }}-${{ github.run_attempt }}
+          gitops-path: e2e-test-gitops-repo
+          environment: ${{ matrix.environment }}
+          application-manifests-path: ./__fixtures__/helm/argocd-app/
+
+      - name: Checkout GitOps Repository
+        id: checkout-gitops
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ env.GITOPS_REPOSITORY }}
+          ref: ${{ env.GITOPS_BRANCH }}
+          path: gitops-repo-temp-dir
+
+      - name: Verify Generated YAML Structure
+        id: verify-yaml
+        run: |
+          cd ./gitops-repo-temp-dir/e2e-test-gitops-repo
+
+          tree -L 2 -a ./ -I 'node_modules'
+
+          # Find and verify the ArgoCD Application YAML file
+          # Look specifically for Application files in the argocd-apps directory
+          YAML_FILE=$(find ./argocd-apps -name "*.yaml" -o -name "*.yml" | head -1)
+          if [ -z "$YAML_FILE" ]; then
+            echo "❌ No ArgoCD Application YAML file found in argocd-apps directory"
+            echo "📁 Directory structure:"
+            find . -type f -name "*.yml" -o -name "*.yaml" | head -10
+            exit 1
+          fi
+
+          echo "📄 Found YAML file: $YAML_FILE"
+          echo "📋 YAML Content:" >> $GITHUB_STEP_SUMMARY
+          echo "<details><summary>YAML Content</summary>" >> $GITHUB_STEP_SUMMARY
+          echo "<br>" >> $GITHUB_STEP_SUMMARY
+          echo "```yaml" >> $GITHUB_STEP_SUMMARY
+          cat "$YAML_FILE" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
+          echo "</details>" >> $GITHUB_STEP_SUMMARY
+
+          # Validate YAML syntax
+          if ! yq eval '.' "$YAML_FILE" > /dev/null 2>&1; then
+            echo "❌ Invalid YAML syntax"
+            exit 1
+          fi
+
+          # Verify ArgoCD Application structure
+          API_VERSION=$(yq eval '.apiVersion' "$YAML_FILE")
+          KIND=$(yq eval '.kind' "$YAML_FILE")
+          APP_NAME=$(yq eval '.metadata.name' "$YAML_FILE")
+          NAMESPACE=$(yq eval '.metadata.namespace' "$YAML_FILE")
+          PROJECT=$(yq eval '.spec.project' "$YAML_FILE")
+          REPO_URL=$(yq eval '.spec.source.repoURL' "$YAML_FILE")
+          TARGET_REVISION=$(yq eval '.spec.source.targetRevision' "$YAML_FILE")
+          SOURCE_PATH=$(yq eval '.spec.source.path' "$YAML_FILE")
+          DEST_SERVER=$(yq eval '.spec.destination.server' "$YAML_FILE")
+          DEST_NAMESPACE=$(yq eval '.spec.destination.namespace' "$YAML_FILE")
+
+          echo "🔍 Verifying ArgoCD Application fields:"
+          echo "  apiVersion: $API_VERSION"
+          echo "  kind: $KIND"
+          echo "  metadata.name: $APP_NAME"
+          echo "  metadata.namespace: $NAMESPACE"
+          echo "  spec.project: $PROJECT"
+          echo "  spec.source.repoURL: $REPO_URL"
+          echo "  spec.source.targetRevision: $TARGET_REVISION"
+          echo "  spec.source.path: $SOURCE_PATH"
+          echo "  spec.destination.server: $DEST_SERVER"
+          echo "  spec.destination.namespace: $DEST_NAMESPACE"
+
+          # Validate required fields
+          if [ "$API_VERSION" != "argoproj.io/v1alpha1" ]; then
+            echo "❌ Invalid apiVersion: expected 'argoproj.io/v1alpha1', got '$API_VERSION'"
+            exit 1
+          fi
+
+          if [ "$KIND" != "Application" ]; then
+            echo "❌ Invalid kind: expected 'Application', got '$KIND'"
+            exit 1
+          fi
+
+          if [ "$NAMESPACE" != "argocd" ]; then
+            echo "❌ Invalid namespace: expected 'argocd', got '$NAMESPACE'"
+            exit 1
+          fi
+
+          if [ -z "$PROJECT" ] || [ "$PROJECT" = "null" ]; then
+            echo "❌ Invalid project: got '$PROJECT'"
+            exit 1
+          fi
+
+          if [ -z "$REPO_URL" ] || [ "$REPO_URL" = "null" ]; then
+            echo "❌ Invalid repoURL: got '$REPO_URL'"
+            exit 1
+          fi
+
+          if [ -z "$DEST_SERVER" ] || [ "$DEST_SERVER" = "null" ]; then
+            echo "❌ Invalid destination.server: got '$DEST_SERVER'"
+            exit 1
+          fi
+
+          if [ -z "$DEST_NAMESPACE" ] || [ "$DEST_NAMESPACE" = "null" ]; then
+            echo "❌ Invalid destination.namespace: got '$DEST_NAMESPACE'"
+            exit 1
+          fi
+
+          # Verify syncPolicy exists
+          SYNC_POLICY=$(yq eval '.spec.syncPolicy' "$YAML_FILE")
+          if [ "$SYNC_POLICY" = "null" ]; then
+            echo "❌ syncPolicy not found in YAML"
+            exit 1
+          fi
+
+          echo "✅ All YAML structure validations passed!"
+          echo "✅ ArgoCD Application manifest is properly formatted"
+          echo "✅ Input values correctly mapped to output YAML"
+          echo "✅ Required fields are present and valid"

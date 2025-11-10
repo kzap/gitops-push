@@ -89,10 +89,10 @@ describe('commitAndPush', () => {
       manifestsPath
     )
 
-    // Check that both application-sets and app manifests directories are created
+    // Check that both argocd-apps/ and app manifests directories are created
     const argocdAppTargetDir = path.join(
       gitOpsRepoPath,
-      'application-sets',
+      'argocd-apps',
       applicationName
     )
     const appManifestsTargetDir = path.join(
@@ -118,7 +118,7 @@ describe('commitAndPush', () => {
 
     const expectedManifestPath = path.join(
       gitOpsRepoPath,
-      'application-sets',
+      'argocd-apps',
       applicationName,
       `${environment}.yaml`
     )
@@ -145,7 +145,12 @@ describe('commitAndPush', () => {
       manifestsPath
     )
 
-    const targetDir = path.join(gitOpsRepoPath, applicationName, environment, manifestsPath)
+    const targetDir = path.join(
+      gitOpsRepoPath,
+      applicationName,
+      environment,
+      manifestsPath
+    )
     expect(mockIo.cp).toHaveBeenCalledWith(
       path.join(manifestsPath, 'deployment.yaml'),
       path.join(targetDir, 'deployment.yaml')
@@ -173,7 +178,12 @@ describe('commitAndPush', () => {
       manifestsPath
     )
 
-    const targetDir = path.join(gitOpsRepoPath, applicationName, environment, manifestsPath)
+    const targetDir = path.join(
+      gitOpsRepoPath,
+      applicationName,
+      environment,
+      manifestsPath
+    )
     expect(mockIo.cp).toHaveBeenCalledWith(
       path.join(manifestsPath, 'charts'),
       path.join(targetDir, 'charts'),
@@ -356,12 +366,20 @@ describe('commitAndPush', () => {
       manifestsPath
     )
 
-    expect(mockExec.exec).toHaveBeenCalledWith('git', ['add', './application-sets'], {
-      cwd: gitOpsRepoPath
-    })
-    expect(mockExec.exec).toHaveBeenCalledWith('git', ['add', './' + applicationName], {
-      cwd: gitOpsRepoPath
-    })
+    expect(mockExec.exec).toHaveBeenCalledWith(
+      'git',
+      ['add', './argocd-apps'],
+      {
+        cwd: gitOpsRepoPath
+      }
+    )
+    expect(mockExec.exec).toHaveBeenCalledWith(
+      'git',
+      ['add', './' + applicationName],
+      {
+        cwd: gitOpsRepoPath
+      }
+    )
   })
 
   it('should use HEAD as default branch if not specified', async () => {
