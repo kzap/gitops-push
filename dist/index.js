@@ -54130,7 +54130,7 @@ function cloneGitOpsRepo(token, org, repo, branch, directory) {
 function commitAndPush(gitopsRepoLocalPath, gitopsPath, gitopsBranch, applicationName, environment, argocdAppManifestPath, applicationManifestsPath) {
     return __awaiter(this, void 0, void 0, function* () {
         // Prefix of path where we put the ArgoCD App to separate it from the application manifests
-        const gitopsArgoAppsPrefix = 'application-sets';
+        const gitopsArgoAppsPrefix = 'argocd-apps';
         const gitopsBasePath = path.join(gitopsRepoLocalPath, gitopsPath);
         try {
             // Create the target directory structure: `${gitopsBasePath}/${gitopsArgoAppsPrefix}/${applicationName}`
@@ -54178,10 +54178,11 @@ function commitAndPush(gitopsRepoLocalPath, gitopsPath, gitopsBranch, applicatio
                 cwd: gitopsBasePath
             });
             core.info(`🤖🤖🤖 Tree output: ${treeStdout}`);
-            // Add changes
-            yield exec.exec('git', ['add', './application-sets'], {
+            // Add ArgoCD app changes
+            yield exec.exec('git', ['add', './' + gitopsArgoAppsPrefix], {
                 cwd: gitopsBasePath
             });
+            // Add application manifests changes
             yield exec.exec('git', ['add', './' + applicationName], {
                 cwd: gitopsBasePath
             });

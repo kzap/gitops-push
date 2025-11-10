@@ -89,10 +89,10 @@ describe('commitAndPush', () => {
       manifestsPath
     )
 
-    // Check that both application-sets and app manifests directories are created
+    // Check that both argocd-apps/ and app manifests directories are created
     const argocdAppTargetDir = path.join(
       gitOpsRepoPath,
-      'application-sets',
+      'argocd-apps',
       applicationName
     )
     const appManifestsTargetDir = path.join(
@@ -118,7 +118,7 @@ describe('commitAndPush', () => {
 
     const expectedManifestPath = path.join(
       gitOpsRepoPath,
-      'application-sets',
+      'argocd-apps',
       applicationName,
       `${environment}.yaml`
     )
@@ -368,7 +368,7 @@ describe('commitAndPush', () => {
 
     expect(mockExec.exec).toHaveBeenCalledWith(
       'git',
-      ['add', './application-sets'],
+      ['add', './argocd-apps'],
       {
         cwd: gitOpsRepoPath
       }

@@ -115,7 +115,7 @@ export async function commitAndPush(
   applicationManifestsPath: string
 ) {
   // Prefix of path where we put the ArgoCD App to separate it from the application manifests
-  const gitopsArgoAppsPrefix = 'application-sets'
+  const gitopsArgoAppsPrefix = 'argocd-apps'
   const gitopsBasePath = path.join(gitopsRepoLocalPath, gitopsPath)
 
   try {
@@ -196,10 +196,11 @@ export async function commitAndPush(
     })
     core.info(`🤖🤖🤖 Tree output: ${treeStdout}`)
 
-    // Add changes
-    await exec.exec('git', ['add', './application-sets'], {
+    // Add ArgoCD app changes
+    await exec.exec('git', ['add', './' + gitopsArgoAppsPrefix], {
       cwd: gitopsBasePath
     })
+    // Add application manifests changes
     await exec.exec('git', ['add', './' + applicationName], {
       cwd: gitopsBasePath
     })

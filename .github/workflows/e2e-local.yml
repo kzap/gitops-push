@@ -66,9 +66,9 @@ jobs:
 
           # Find and verify the ApplicationSet YAML file
           # Look specifically for ApplicationSet files in the applicationsets directory
-          YAML_FILE=$(find ./application-sets -name "*.yaml" -o -name "*.yml" | head -1)
+          YAML_FILE=$(find ./argocd-apps -name "*.yaml" -o -name "*.yml" | head -1)
           if [ -z "$YAML_FILE" ]; then
-            echo "❌ No ApplicationSet YAML file found in applicationsets directory"
+            echo "❌ No ApplicationSet YAML file found in argocd-apps directory"
             echo "📁 Directory structure:"
             find . -type f -name "*.yml" -o -name "*.yaml" | head -10
             exit 1

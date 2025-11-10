@@ -251,7 +251,7 @@ This action automates the GitOps workflow by:
    repository as:
    ```
    <gitops-path>/
-   ├── application-sets/
+   ├── argocd-apps/
    │   └── <application-name>-<environment>.yaml  # ArgoCD ApplicationSet manifest
    └── applications/
        └── <application-name>/
@@ -279,7 +279,7 @@ structure:
 ```
 gitops-repo/
 └── <gitops-path>/
-    ├── application-sets/
+    ├── argocd-apps/
     │   ├── my-app-dev.yaml
     │   ├── my-app-staging.yaml
     │   └── my-app-production.yaml
@@ -299,7 +299,7 @@ gitops-repo/
                 └── ingress.yaml
 ```
 
-The `application-sets` directory contains the ArgoCD ApplicationSet manifests
+The `argocd-apps` directory contains the ArgoCD ApplicationSet manifests
 that tell ArgoCD where to find your application manifests and how to deploy
 them.
 
