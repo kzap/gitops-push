@@ -54,8 +54,9 @@ latest release notes.
     # Required: false
     application-manifests-path: ''
 
-    # Path to the Helm chart used to render the ArgoCD Application
-    # Default: './templates/helm/argocd-app'
+    # Helm chart URL used to render the ArgoCD Application
+    # Should be a git-helm URL (e.g., git+https://github.com/owner/repo//path/to/chart?ref=v1.0.0)
+    # Default: 'git+https://github.com/kzap/gitops-push//templates/helm/argocd-app?ref=main'
     # Required: false
     argocd-app-helm-chart: ''
 
@@ -76,6 +77,7 @@ latest release notes.
   - [Multi-environment deployments](#multi-environment-deployments)
   - [Custom application name and path](#custom-application-name-and-path)
   - [Using custom values](#using-custom-values)
+  - [Using custom ArgoCD Helm chart](#using-custom-argocd-helm-chart)
   - [Deploy to specific branch in GitOps repo](#deploy-to-specific-branch-in-gitops-repo)
   - [Using environment variable for repository](#using-environment-variable-for-repository)
   - [Complete example with all inputs](#complete-example-with-all-inputs)
@@ -165,6 +167,26 @@ Pass custom Helm values to configure your ArgoCD Application:
           memory: 512Mi
 ```
 
+## Using custom ArgoCD Helm chart
+
+Use a custom ArgoCD Helm chart from a Git repository using git-helm URLs:
+
+```yaml
+- name: Deploy with custom ArgoCD chart
+  uses: kzap/gitops-push@v1
+  with:
+    gitops-token: ${{ secrets.GITOPS_TOKEN }}
+    gitops-repository: myorg/gitops-repo
+    environment: production
+    argocd-app-helm-chart: git+https://github.com/myorg/helm-charts//argocd-app?ref=v1.0.0
+```
+
+**Note**: Always use git-helm URLs (format: `git+https://github.com/owner/repo//path/to/chart?ref=tag`) instead of relative paths for the `argocd-app-helm-chart` parameter. This ensures:
+- Better portability across different workflows
+- Version pinning with specific tags or commits
+- Consistent chart access across environments
+- No dependency on local file structure
+
 ## Deploy to specific branch in GitOps repo
 
 Push to a specific branch in your GitOps repository:
@@ -229,7 +251,7 @@ steps:
           environment: production
           application-name: my-app
           application-manifests-path: ./deploy/manifests
-          argocd-app-helm-chart: ./deploy/argocd-helm
+          argocd-app-helm-chart: 'git+https://github.com/myorg/helm-charts//argocd-app?ref=v1.0.0'
           custom-values: |
             namespace: production
             replicaCount: 3
