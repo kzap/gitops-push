@@ -82,6 +82,7 @@ latest release notes.
   - [Using environment variable for repository](#using-environment-variable-for-repository)
   - [Complete example with all inputs](#complete-example-with-all-inputs)
 - [How It Works](#how-it-works)
+- [ArgoCD Bootstrap Configuration](#argocd-bootstrap-configuration)
 - [Directory Structure](#directory-structure)
 - [Recommended Permissions](#recommended-permissions)
 - [License](#license)
@@ -292,6 +293,47 @@ The action generates ArgoCD ApplicationSet manifests that enable:
 - Easy rollbacks via Git history
 - Multi-cluster deployments
 - Environment-specific configurations
+
+# ArgoCD Bootstrap Configuration
+
+To automatically load all the generated ArgoCD applications, you can create a bootstrap ArgoCD Application that monitors the `argocd-apps` directory. This "app of apps" pattern allows ArgoCD to automatically discover and manage all applications pushed by this action.
+
+Create the following bootstrap application in your ArgoCD instance:
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: bootstrap-argocd-apps
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/your-org/gitops-repo.git
+    targetRevision: main
+    path: argocd-apps
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+```
+
+**Configuration Notes:**
+- Replace `repoURL` with your GitOps repository URL
+- Update `path` to match your `gitops-path` configuration plus `/argocd-apps`
+- The `directory.recurse: true` setting ensures all ArgoCD app manifests are discovered
+- `automated` sync policy ensures new applications are automatically deployed
+- `prune: true` removes applications when their manifests are deleted
+- `selfHeal: true` automatically corrects any drift from the desired state
+
+Once this bootstrap application is created, any ArgoCD application manifests pushed by this action will be automatically discovered and synced by ArgoCD.
 
 # Directory Structure
 
