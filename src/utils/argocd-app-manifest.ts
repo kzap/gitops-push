@@ -112,7 +112,7 @@ export async function generateArgoCDAppManifest(
       `helm fetch failed with exit code ${helmFetchExitCode}: ${helmFetchStderr}`
     )
   }
-
+  
   // render the manifest using helm template
   let {
     exitCode: helmTemplateExitCode,

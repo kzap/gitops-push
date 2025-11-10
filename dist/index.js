@@ -54364,9 +54364,18 @@ function setupTool(tool) {
                 '1.4.1'
             ]);
             if (helmPluginInstallExitCode !== 0) {
-                throw new Error(`helm plugin install failed with exit code ${helmPluginInstallExitCode}: ${helmPluginInstallStderr}`);
+                // Check if the error is because the plugin already exists (can be in either stdout or stderr)
+                const combinedOutput = helmPluginInstallStdout + helmPluginInstallStderr;
+                if (combinedOutput.includes('plugin already exists')) {
+                    core.info('Helm git plugin already installed');
+                }
+                else {
+                    throw new Error(`helm plugin install failed with exit code ${helmPluginInstallExitCode}: ${helmPluginInstallStderr}`);
+                }
             }
-            core.info('Helm git plugin installed');
+            else {
+                core.info('Helm git plugin installed');
+            }
             return true;
         }
         return false;
@@ -54377,6 +54386,7 @@ function execWithOutput(command, args, options) {
         let stdout = '';
         let stderr = '';
         const defaultOptions = {
+            ignoreReturnCode: true, // Don't throw on non-zero exit codes
             listeners: {
                 stdout: (data) => {
                     stdout += data.toString();

@@ -98,11 +98,18 @@ export async function setupTool(tool: SupportedTool): Promise<boolean> {
       '1.4.1'
     ])
     if (helmPluginInstallExitCode !== 0) {
-      throw new Error(
-        `helm plugin install failed with exit code ${helmPluginInstallExitCode}: ${helmPluginInstallStderr}`
-      )
+      // Check if the error is because the plugin already exists (can be in either stdout or stderr)
+      const combinedOutput = helmPluginInstallStdout + helmPluginInstallStderr
+      if (combinedOutput.includes('plugin already exists')) {
+        core.info('Helm git plugin already installed')
+      } else {
+        throw new Error(
+          `helm plugin install failed with exit code ${helmPluginInstallExitCode}: ${helmPluginInstallStderr}`
+        )
+      }
+    } else {
+      core.info('Helm git plugin installed')
     }
-    core.info('Helm git plugin installed')
 
     return true
   }
@@ -117,6 +124,7 @@ export async function execWithOutput(
   let stdout = ''
   let stderr = ''
   const defaultOptions: ExecOptions = {
+    ignoreReturnCode: true, // Don't throw on non-zero exit codes
     listeners: {
       stdout: (data: Buffer) => {
         stdout += data.toString()
