@@ -53752,7 +53752,7 @@ function run() {
             const applicationName = core.getInput('application-name') || github.context.repo.repo;
             const applicationManifestsPath = core.getInput('application-manifests-path', { required: false }) || './';
             const customValues = core.getInput('custom-values', { required: false }) || '';
-            const argoCDAppHelmChart = core.getInput('argocd-app-helm-chart', { required: false }) ||
+            const argoCDAppHelmChartGitURL = core.getInput('argocd-app-helm-chart', { required: false }) ||
                 'git+https://github.com/kzap/gitops-push@templates/helm/argocd-app-0.1.0.tgz?ref=main';
             // Parse repository information
             const { gitopsOrg, gitopsRepoName } = (0, git_1.parseRepositoryInfo)(gitopsRepository);
@@ -53768,7 +53768,7 @@ function run() {
             core.info(`🔍 Environment: ${environment}`);
             core.info(`🔍 Application Name: ${applicationName}`);
             core.info(`🔍 Application Manifests Path: ${applicationManifestsPath}`);
-            core.info(`🔍 ArgoCD App Helm Chart: ${argoCDAppHelmChart}`);
+            core.info(`🔍 ArgoCD App Helm Chart: ${argoCDAppHelmChartGitURL}`);
             core.info(`🔍 Custom Values: ${customValues}`);
             core.notice(`We are going to push [Env: ${environment}] ArgoCD ApplicationSet for [App: ${applicationName}] to [Repo: ${gitopsOrg}/${gitopsRepoName}] on the branch [Branch: ${gitopsBranch || '[Using default branch]'}].`);
             // 0. Clone GitOps Repository
@@ -53782,7 +53782,7 @@ function run() {
             // Prepare template data for the ApplicationSet manifest
             const valuesYaml = yield (0, argocd_app_manifest_1.generateValuesYaml)(applicationName, environment, gitopsRepoName, gitopsOrg, gitopsBranch, gitopsPath, customValues, applicationManifestsPath);
             // Generate the manifest file to a temporary file
-            const argocdAppManifest = yield (0, argocd_app_manifest_1.generateArgoCDAppManifest)(valuesYaml, argoCDAppHelmChart);
+            const argocdAppManifest = yield (0, argocd_app_manifest_1.generateArgoCDAppManifest)(valuesYaml, argoCDAppHelmChartGitURL);
             // 2. Copy files to the GitOps repository and commit/push
             // Commit and push changes - this will organize files into applicationName/environment/
             yield (0, git_1.commitAndPush)(gitopsRepoLocalPath, gitopsPath, gitopsBranch, applicationName, environment, argocdAppManifest, applicationManifestsPath);
@@ -53933,12 +53933,10 @@ function generateValuesYaml(applicationName, environment, sourceRepo, sourceOrg,
 //
 // @example
 // generateArgoCDAppManifest(
-//   applicationName: 'my-application',
-//   environment: 'production',
 //   customValuesYaml: 'custom-values.yaml',
-//   argoCDAppHelmChart: '../templates/helm/argocd-app'
+//   argoCDAppHelmChartGitURL: 'git+https://github.com/kzap/gitops-push@templates/helm/argocd-app-0.1.0.tgz?ref=main'
 // )
-function generateArgoCDAppManifest(customValuesYaml, argoCDAppHelmChart) {
+function generateArgoCDAppManifest(customValuesYaml, argoCDAppHelmChartGitURL) {
     return __awaiter(this, void 0, void 0, function* () {
         // download helm tool using tc cache
         yield (0, tools_1.fetchTcTool)('helm');
@@ -53948,7 +53946,7 @@ function generateArgoCDAppManifest(customValuesYaml, argoCDAppHelmChart) {
         const customValuesFilePath = path.join(os.tmpdir(), randomCustomValuesFileName);
         yield fs.promises.writeFile(customValuesFilePath, customValuesYaml);
         // test if argoCDAppHelmChart is a valid by running helm fetch on it
-        let { exitCode: helmFetchExitCode, stdout: helmFetchStdout, stderr: helmFetchStderr } = yield (0, tools_1.execWithOutput)('helm', ['fetch', argoCDAppHelmChart]);
+        let { exitCode: helmFetchExitCode, stdout: helmFetchStdout, stderr: helmFetchStderr } = yield (0, tools_1.execWithOutput)('helm', ['fetch', argoCDAppHelmChartGitURL]);
         if (helmFetchExitCode !== 0) {
             throw new Error(`helm fetch failed with exit code ${helmFetchExitCode}: ${helmFetchStderr}`);
         }
@@ -53956,7 +53954,7 @@ function generateArgoCDAppManifest(customValuesYaml, argoCDAppHelmChart) {
         let { exitCode: helmTemplateExitCode, stdout: helmTemplateStdout, stderr: helmTemplateStderr } = yield (0, tools_1.execWithOutput)('helm', [
             'template',
             'argocd-app',
-            argoCDAppHelmChart,
+            argoCDAppHelmChartGitURL,
             '-f',
             customValuesFilePath
         ]);

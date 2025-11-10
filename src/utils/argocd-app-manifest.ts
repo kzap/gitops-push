@@ -80,14 +80,12 @@ export async function generateValuesYaml(
 //
 // @example
 // generateArgoCDAppManifest(
-//   applicationName: 'my-application',
-//   environment: 'production',
 //   customValuesYaml: 'custom-values.yaml',
-//   argoCDAppHelmChart: '../templates/helm/argocd-app'
+//   argoCDAppHelmChartGitURL: 'git+https://github.com/kzap/gitops-push@templates/helm/argocd-app-0.1.0.tgz?ref=main'
 // )
 export async function generateArgoCDAppManifest(
   customValuesYaml: string,
-  argoCDAppHelmChart: string
+  argoCDAppHelmChartGitURL: string
 ): Promise<string> {
   // download helm tool using tc cache
   await fetchTcTool('helm')
@@ -106,13 +104,13 @@ export async function generateArgoCDAppManifest(
     exitCode: helmFetchExitCode,
     stdout: helmFetchStdout,
     stderr: helmFetchStderr
-  } = await execWithOutput('helm', ['fetch', argoCDAppHelmChart])
+  } = await execWithOutput('helm', ['fetch', argoCDAppHelmChartGitURL])
   if (helmFetchExitCode !== 0) {
     throw new Error(
       `helm fetch failed with exit code ${helmFetchExitCode}: ${helmFetchStderr}`
     )
   }
-  
+
   // render the manifest using helm template
   let {
     exitCode: helmTemplateExitCode,
@@ -121,7 +119,7 @@ export async function generateArgoCDAppManifest(
   } = await execWithOutput('helm', [
     'template',
     'argocd-app',
-    argoCDAppHelmChart,
+    argoCDAppHelmChartGitURL,
     '-f',
     customValuesFilePath
   ])

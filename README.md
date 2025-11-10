@@ -299,9 +299,8 @@ gitops-repo/
                 └── ingress.yaml
 ```
 
-The `argocd-apps` directory contains the ArgoCD ApplicationSet manifests
-that tell ArgoCD where to find your application manifests and how to deploy
-them.
+The `argocd-apps` directory contains the ArgoCD ApplicationSet manifests that
+tell ArgoCD where to find your application manifests and how to deploy them.
 
 The `applications` directory contains your actual Kubernetes manifests organized
 by application name and environment.

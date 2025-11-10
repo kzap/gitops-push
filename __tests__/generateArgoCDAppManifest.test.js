@@ -48,7 +48,7 @@ application:
 
     const resultFilePath = await generateArgoCDAppManifest(
       customValuesYaml,
-      fixtureChart
+      'git+https://github.com/kzap/gitops-push@templates/helm/argocd-app-0.1.0.tgz?ref=main'
     )
 
     // Verify the result is a valid file path
