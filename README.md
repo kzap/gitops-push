@@ -3,15 +3,21 @@
 
 # GitOps Push Action
 
-This GitHub Action automates the deployment of applications using GitOps principles with ArgoCD. It generates ArgoCD ApplicationSet manifests from your application manifests and pushes them to a GitOps repository, enabling declarative, version-controlled deployments across multiple environments.
+This GitHub Action automates the deployment of applications using GitOps
+principles with ArgoCD. It generates ArgoCD ApplicationSet manifests from your
+application manifests and pushes them to a GitOps repository, enabling
+declarative, version-controlled deployments across multiple environments.
 
 # What's New
 
-Please refer to the [release page](https://github.com/kzap/gitops-push/releases/latest) for the latest release notes.
+Please refer to the
+[release page](https://github.com/kzap/gitops-push/releases/latest) for the
+latest release notes.
 
 # Usage
 
 <!-- start usage -->
+
 ```yaml
 - uses: kzap/gitops-push@v1
   with:
@@ -58,6 +64,7 @@ Please refer to the [release page](https://github.com/kzap/gitops-push/releases/
     # Required: false
     custom-values: ''
 ```
+
 <!-- end usage -->
 
 # Scenarios
@@ -79,7 +86,8 @@ Please refer to the [release page](https://github.com/kzap/gitops-push/releases/
 
 ## Basic deployment to a GitOps repository
 
-Deploy your application manifests to a GitOps repository for a specific environment:
+Deploy your application manifests to a GitOps repository for a specific
+environment:
 
 ```yaml
 - name: Checkout
@@ -235,9 +243,12 @@ steps:
 
 This action automates the GitOps workflow by:
 
-1. **Cloning the GitOps Repository**: Securely clones your GitOps repository to a temporary location
-2. **Generating ArgoCD Manifests**: Creates an ArgoCD ApplicationSet manifest using a Helm chart template
-3. **Organizing Files**: Structures your deployment files in the GitOps repository as:
+1. **Cloning the GitOps Repository**: Securely clones your GitOps repository to
+   a temporary location
+2. **Generating ArgoCD Manifests**: Creates an ArgoCD ApplicationSet manifest
+   using a Helm chart template
+3. **Organizing Files**: Structures your deployment files in the GitOps
+   repository as:
    ```
    <gitops-path>/
    ├── application-sets/
@@ -247,10 +258,13 @@ This action automates the GitOps workflow by:
            └── <environment>/
                └── [your application manifests]
    ```
-4. **Committing and Pushing**: Commits the changes with a descriptive message and pushes to the GitOps repository
-5. **ArgoCD Sync**: ArgoCD automatically detects the changes and syncs your application to the cluster
+4. **Committing and Pushing**: Commits the changes with a descriptive message
+   and pushes to the GitOps repository
+5. **ArgoCD Sync**: ArgoCD automatically detects the changes and syncs your
+   application to the cluster
 
 The action generates ArgoCD ApplicationSet manifests that enable:
+
 - Automatic discovery of application environments
 - Declarative, version-controlled deployments
 - Easy rollbacks via Git history
@@ -259,7 +273,8 @@ The action generates ArgoCD ApplicationSet manifests that enable:
 
 # Directory Structure
 
-After running the action, your GitOps repository will have the following structure:
+After running the action, your GitOps repository will have the following
+structure:
 
 ```
 gitops-repo/
@@ -284,19 +299,23 @@ gitops-repo/
                 └── ingress.yaml
 ```
 
-The `application-sets` directory contains the ArgoCD ApplicationSet manifests that tell ArgoCD where to find your application manifests and how to deploy them.
+The `application-sets` directory contains the ArgoCD ApplicationSet manifests
+that tell ArgoCD where to find your application manifests and how to deploy
+them.
 
-The `applications` directory contains your actual Kubernetes manifests organized by application name and environment.
+The `applications` directory contains your actual Kubernetes manifests organized
+by application name and environment.
 
 # Recommended Permissions
 
-When using this action in your GitHub Actions workflow, the following permissions are recommended:
+When using this action in your GitHub Actions workflow, the following
+permissions are recommended:
 
 For the **source repository** workflow:
 
 ```yaml
 permissions:
-  contents: read  # Read source code
+  contents: read # Read source code
 ```
 
 For the **GitOps token** (used to push to GitOps repository):
@@ -306,10 +325,15 @@ For the **GitOps token** (used to push to GitOps repository):
 # - contents: write  # Push commits
 ```
 
-You can use a fine-grained Personal Access Token (PAT) or GitHub App token with write access to the GitOps repository. Store it as a secret and reference it via `${{ secrets.GITOPS_TOKEN }}`.
+You can use a fine-grained Personal Access Token (PAT) or GitHub App token with
+write access to the GitOps repository. Store it as a secret and reference it via
+`${{ secrets.GITOPS_TOKEN }}`.
 
-**Security Best Practice**: Use a dedicated bot account or GitHub App with minimal permissions (write access only to the GitOps repository) rather than a personal token.
+**Security Best Practice**: Use a dedicated bot account or GitHub App with
+minimal permissions (write access only to the GitOps repository) rather than a
+personal token.
 
 # License
 
-The scripts and documentation in this project are released under the [MIT License](LICENSE).
+The scripts and documentation in this project are released under the
+[MIT License](LICENSE).

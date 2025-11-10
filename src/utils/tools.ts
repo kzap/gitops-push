@@ -1,6 +1,7 @@
 import * as tc from '@actions/tool-cache'
 import * as core from '@actions/core'
 import * as path from 'path'
+import * as exec from '@actions/exec'
 
 type SupportedTool = 'helm'
 type PlatformSubset = Extract<NodeJS.Platform, 'linux' | 'darwin' | 'win32'>
@@ -79,4 +80,24 @@ export async function fetchTcTool(
   core.addPath(cachedPath)
   core.info(`Tool ${tool} version ${version} has been cached in ${cachedPath}`)
   return true
+}
+
+export async function setupTool(tool: SupportedTool): Promise<boolean> {
+  // if tool is helm run, do helm plugin install https://github.com/aslafy-z/helm-git --version 1.4.1
+  if (tool === 'helm') {
+    await exec.exec('helm', [
+      'plugin',
+      'install',
+      'https://github.com/aslafy-z/helm-git',
+      '--version',
+      '1.4.1'
+    ])
+    core.info('Helm git plugin installed')
+
+    // show output of helm plugin list
+    const output = await exec.exec('helm', ['plugin', 'list'])
+    core.info(`Helm plugins list: ${output}`)
+    return true
+  }
+  return false
 }

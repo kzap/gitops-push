@@ -53752,7 +53752,8 @@ function run() {
             const applicationName = core.getInput('application-name') || github.context.repo.repo;
             const applicationManifestsPath = core.getInput('application-manifests-path', { required: false }) || './';
             const customValues = core.getInput('custom-values', { required: false }) || '';
-            const argoCDAppHelmChart = core.getInput('argocd-app-helm-chart', { required: false }) || './templates/helm/argocd-app';
+            const argoCDAppHelmChart = core.getInput('argocd-app-helm-chart', { required: false }) ||
+                './templates/helm/argocd-app';
             // Parse repository information
             const { gitopsOrg, gitopsRepoName } = (0, git_1.parseRepositoryInfo)(gitopsRepository);
             core.info(`✅ Repository parsed as: ${gitopsOrg}/${gitopsRepoName}`);
@@ -53942,6 +53943,7 @@ function generateArgoCDAppManifest(customValuesYaml, argoCDAppHelmChart) {
     return __awaiter(this, void 0, void 0, function* () {
         // download helm tool using tc cache
         yield (0, tools_1.fetchTcTool)('helm');
+        yield (0, tools_1.setupTool)('helm');
         // store custom values yaml in a temporary random file name
         const randomCustomValuesFileName = `gitops-push-custom-values-${Date.now()}-${Math.random().toString(36).substring(2, 15)}.yaml`;
         const customValuesFilePath = path.join(os.tmpdir(), randomCustomValuesFileName);
@@ -54191,10 +54193,17 @@ function commitAndPush(gitopsRepoLocalPath, gitopsPath, gitopsBranch, applicatio
             });
             core.info(`🤖🤖🤖 Tree output: ${treeOutput}`);
             // Add changes
-            yield exec.exec('git', ['add', './application-sets'], { cwd: gitopsBasePath });
-            yield exec.exec('git', ['add', './' + applicationName], { cwd: gitopsBasePath });
+            yield exec.exec('git', ['add', './application-sets'], {
+                cwd: gitopsBasePath
+            });
+            yield exec.exec('git', ['add', './' + applicationName], {
+                cwd: gitopsBasePath
+            });
             // Check if there are any changes to commit
-            const hasChanges = yield exec.exec('git', ['diff', '--cached', '--quiet'], { cwd: gitopsBasePath, ignoreReturnCode: true });
+            const hasChanges = yield exec.exec('git', ['diff', '--cached', '--quiet'], {
+                cwd: gitopsBasePath,
+                ignoreReturnCode: true
+            });
             core.info(`🤖🤖🤖 Has changes: ${hasChanges}`);
             if (hasChanges === 0) {
                 core.info('No changes to commit');
@@ -54291,9 +54300,11 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.fetchTcTool = fetchTcTool;
+exports.setupTool = setupTool;
 const tc = __importStar(__nccwpck_require__(3472));
 const core = __importStar(__nccwpck_require__(7484));
 const path = __importStar(__nccwpck_require__(6928));
+const exec = __importStar(__nccwpck_require__(5236));
 const toolDownloadUrl = {
     helm: {
         latest: {
@@ -54351,6 +54362,26 @@ function fetchTcTool(tool_1) {
         core.addPath(cachedPath);
         core.info(`Tool ${tool} version ${version} has been cached in ${cachedPath}`);
         return true;
+    });
+}
+function setupTool(tool) {
+    return __awaiter(this, void 0, void 0, function* () {
+        // if tool is helm run, do helm plugin install https://github.com/aslafy-z/helm-git --version 1.4.1
+        if (tool === 'helm') {
+            yield exec.exec('helm', [
+                'plugin',
+                'install',
+                'https://github.com/aslafy-z/helm-git',
+                '--version',
+                '1.4.1'
+            ]);
+            core.info('Helm git plugin installed');
+            // show output of helm plugin list
+            const output = yield exec.exec('helm', ['plugin', 'list']);
+            core.info(`Helm plugins list: ${output}`);
+            return true;
+        }
+        return false;
     });
 }
 

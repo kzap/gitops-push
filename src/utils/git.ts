@@ -182,17 +182,28 @@ export async function commitAndPush(
     core.info(`🤖🤖🤖 Git status output: ${statusOutput}`)
 
     // Show directory tree structure
-    const treeOutput = await exec.exec('tree', ['-L', '2', '-a', '-I', 'node_modules'], {
-      cwd: gitopsBasePath
-    })
+    const treeOutput = await exec.exec(
+      'tree',
+      ['-L', '2', '-a', '-I', 'node_modules'],
+      {
+        cwd: gitopsBasePath
+      }
+    )
     core.info(`🤖🤖🤖 Tree output: ${treeOutput}`)
 
     // Add changes
-    await exec.exec('git', ['add', './application-sets'], { cwd: gitopsBasePath })
-    await exec.exec('git', ['add', './' + applicationName], { cwd: gitopsBasePath })
+    await exec.exec('git', ['add', './application-sets'], {
+      cwd: gitopsBasePath
+    })
+    await exec.exec('git', ['add', './' + applicationName], {
+      cwd: gitopsBasePath
+    })
 
     // Check if there are any changes to commit
-    const hasChanges = await exec.exec('git', ['diff', '--cached', '--quiet'], {cwd: gitopsBasePath, ignoreReturnCode: true})
+    const hasChanges = await exec.exec('git', ['diff', '--cached', '--quiet'], {
+      cwd: gitopsBasePath,
+      ignoreReturnCode: true
+    })
     core.info(`🤖🤖🤖 Has changes: ${hasChanges}`)
     if (hasChanges === 0) {
       core.info('No changes to commit')

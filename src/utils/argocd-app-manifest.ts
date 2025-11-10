@@ -1,6 +1,6 @@
 import * as exec from '@actions/exec'
 import * as core from '@actions/core'
-import { fetchTcTool } from './tools'
+import { fetchTcTool, setupTool } from './tools'
 import * as path from 'path'
 import * as fs from 'fs'
 import * as os from 'os'
@@ -91,6 +91,7 @@ export async function generateArgoCDAppManifest(
 ): Promise<string> {
   // download helm tool using tc cache
   await fetchTcTool('helm')
+  await setupTool('helm')
 
   // store custom values yaml in a temporary random file name
   const randomCustomValuesFileName = `gitops-push-custom-values-${Date.now()}-${Math.random().toString(36).substring(2, 15)}.yaml`
