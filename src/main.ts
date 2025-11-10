@@ -48,7 +48,7 @@ export async function run() {
       core.getInput('custom-values', { required: false }) || ''
     const argoCDAppHelmChart =
       core.getInput('argocd-app-helm-chart', { required: false }) ||
-      'git+https://github.com/kzap/argocd-app@templates/helm/argocd-app?ref=main'
+      'git+https://github.com/kzap/gitops-push@templates/helm/argocd-app-0.1.0.tgz?ref=amt/test-remote-action'
 
     // Parse repository information
     const { gitopsOrg, gitopsRepoName } = parseRepositoryInfo(gitopsRepository)
