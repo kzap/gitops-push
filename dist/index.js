@@ -53753,7 +53753,7 @@ function run() {
             const applicationManifestsPath = core.getInput('application-manifests-path', { required: false }) || './';
             const customValues = core.getInput('custom-values', { required: false }) || '';
             const argoCDAppHelmChart = core.getInput('argocd-app-helm-chart', { required: false }) ||
-                'git+https://github.com/kzap/gitops-push@templates/helm/argocd-app-0.1.0.tgz?ref=amt/test-remote-action';
+                'git+https://github.com/kzap/gitops-push@templates/helm/argocd-app-0.1.0.tgz?ref=main';
             // Parse repository information
             const { gitopsOrg, gitopsRepoName } = (0, git_1.parseRepositoryInfo)(gitopsRepository);
             core.info(`✅ Repository parsed as: ${gitopsOrg}/${gitopsRepoName}`);
