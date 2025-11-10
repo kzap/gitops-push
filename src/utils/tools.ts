@@ -2,6 +2,7 @@ import * as tc from '@actions/tool-cache'
 import * as core from '@actions/core'
 import * as path from 'path'
 import * as exec from '@actions/exec'
+import type { ExecOptions } from '@actions/exec'
 
 type SupportedTool = 'helm'
 type PlatformSubset = Extract<NodeJS.Platform, 'linux' | 'darwin' | 'win32'>
@@ -85,19 +86,61 @@ export async function fetchTcTool(
 export async function setupTool(tool: SupportedTool): Promise<boolean> {
   // if tool is helm run, do helm plugin install https://github.com/aslafy-z/helm-git --version 1.4.1
   if (tool === 'helm') {
-    await exec.exec('helm', [
+    let {
+      exitCode: helmPluginInstallExitCode,
+      stdout: helmPluginInstallStdout,
+      stderr: helmPluginInstallStderr
+    } = await execWithOutput('helm', [
       'plugin',
       'install',
       'https://github.com/aslafy-z/helm-git',
       '--version',
       '1.4.1'
     ])
+    if (helmPluginInstallExitCode !== 0) {
+      throw new Error(
+        `helm plugin install failed with exit code ${helmPluginInstallExitCode}: ${helmPluginInstallStderr}`
+      )
+    }
     core.info('Helm git plugin installed')
 
     // show output of helm plugin list
-    const output = await exec.exec('helm', ['plugin', 'list'])
-    core.info(`Helm plugins list: ${output}`)
+    let {
+      exitCode: helmPluginListExitCode,
+      stdout: helmPluginListStdout,
+      stderr: helmPluginListStderr
+    } = await execWithOutput('helm', ['plugin', 'list'])
+    if (helmPluginListExitCode !== 0) {
+      throw new Error(
+        `helm plugin list failed with exit code ${helmPluginListExitCode}: ${helmPluginListStderr}`
+      )
+    }
+    core.info(`Helm plugins list: ${helmPluginListStdout}`)
     return true
   }
   return false
+}
+
+export async function execWithOutput(
+  command: string,
+  args: string[],
+  options?: ExecOptions
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  let stdout = ''
+  let stderr = ''
+  const defaultOptions: ExecOptions = {
+    listeners: {
+      stdout: (data: Buffer) => {
+        stdout += data.toString()
+      },
+      stderr: (data: Buffer) => {
+        stderr += data.toString()
+      }
+    }
+  }
+  const finalOptions = { ...defaultOptions, ...options }
+
+  core.info(`Executing command: ${command} ${args.join(' ')}`)
+  const exitCode = await exec.exec(command, args, finalOptions)
+  return { exitCode, stdout: stdout.trim(), stderr: stderr.trim() }
 }

@@ -4,6 +4,7 @@ import * as github from '@actions/github'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as io from '@actions/io'
+import { execWithOutput } from './tools'
 
 /**
  * Parse the repository information from input.
@@ -176,20 +177,24 @@ export async function commitAndPush(
     }
 
     // Show github status output for the changes
-    const statusOutput = await exec.exec('git', ['status'], {
+    let {
+      exitCode: gitStatusExitCode,
+      stdout: gitStatusStdout,
+      stderr: gitStatusStderr
+    } = await execWithOutput('git', ['status'], {
       cwd: gitopsBasePath
     })
-    core.info(`🤖🤖🤖 Git status output: ${statusOutput}`)
+    core.info(`🤖🤖🤖 Git status output: ${gitStatusStdout}`)
 
     // Show directory tree structure
-    const treeOutput = await exec.exec(
-      'tree',
-      ['-L', '2', '-a', '-I', 'node_modules'],
-      {
-        cwd: gitopsBasePath
-      }
-    )
-    core.info(`🤖🤖🤖 Tree output: ${treeOutput}`)
+    let {
+      exitCode: treeExitCode,
+      stdout: treeStdout,
+      stderr: treeStderr
+    } = await execWithOutput('tree', ['-L', '2', '-a', '-I', 'node_modules'], {
+      cwd: gitopsBasePath
+    })
+    core.info(`🤖🤖🤖 Tree output: ${treeStdout}`)
 
     // Add changes
     await exec.exec('git', ['add', './application-sets'], {
@@ -200,12 +205,16 @@ export async function commitAndPush(
     })
 
     // Check if there are any changes to commit
-    const hasChanges = await exec.exec('git', ['diff', '--cached', '--quiet'], {
+    let {
+      exitCode: gitDiffExitCode,
+      stdout: gitDiffStdout,
+      stderr: gitDiffStderr
+    } = await execWithOutput('git', ['diff', '--cached', '--quiet'], {
       cwd: gitopsBasePath,
       ignoreReturnCode: true
     })
-    core.info(`🤖🤖🤖 Has changes: ${hasChanges}`)
-    if (hasChanges === 0) {
+    core.info(`🤖🤖🤖 Has changes: ${gitDiffExitCode}`)
+    if (gitDiffExitCode === 0) {
       core.info('No changes to commit')
       return
     }
