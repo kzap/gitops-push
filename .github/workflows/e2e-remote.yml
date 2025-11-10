@@ -19,6 +19,9 @@ jobs:
           - test-env
     environment: ${{ matrix.environment }}
     steps:
+      - name: Checkout Service Repository
+        uses: actions/checkout@v5
+
       - name: Test Remote Action
         id: test-action
         # Testing
