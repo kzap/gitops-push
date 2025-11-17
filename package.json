@@ -52,7 +52,7 @@
     "@eslint/compat": "^1.2.7",
     "@github/local-action": "^6.0.0",
     "@jest/globals": "^29.7.0",
-    "@rollup/plugin-commonjs": "^28.0.8",
+    "@rollup/plugin-commonjs": "^29.0.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-typescript": "^12.1.2",
     "@types/lodash": "^4.17.20",
